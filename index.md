@@ -3,11 +3,12 @@ layout: default
 title: Home
 ---
 
-# {{ site.title }}
+<div class="article-item">
+    <span class="article-date">2024 Jan 29</span>
+    <a href="{{ '/articles/article-1/' | relative_url }}" class="article-title">Article 1</a>
+</div>
 
-{{ site.description }}
-
-## Articles
-
-* [Article 1]({{ '/articles/article-1/' | relative_url }})
-* [Article 2]({{ '/articles/article-2/' | relative_url }})
+<div class="article-item">
+    <span class="article-date">2024 Jan 28</span>
+    <a href="{{ '/articles/article-2/' | relative_url }}" class="article-title">Article 2</a>
+</div>
