@@ -1,0 +1,105 @@
+---
+layout: post
+title: "Sample Post: Demonstrating All Features"
+date: 2025-02-26
+tags: [markdown, latex, code]
+---
+
+This is a sample post that demonstrates all the features supported by this blog.
+
+## Markdown Features
+
+### Text Formatting
+
+You can write text in **bold** or *italic*. You can also use ~~strikethrough~~ if needed.
+
+### Lists
+
+Unordered list:
+- Item 1
+- Item 2
+- Item 3
+
+Ordered list:
+1. First item
+2. Second item
+3. Third item
+
+### Blockquotes
+
+> This is a blockquote. It can be used to highlight important information or to quote someone.
+
+### Links
+
+Here's a [link to GitHub](https://github.com).
+
+## LaTeX Support
+
+This blog supports inline LaTeX like $E = mc^2$ and also block-level equations:
+
+$$
+\begin{align}
+\nabla \times \vec{\mathbf{B}} -\, \frac1c\, \frac{\partial\vec{\mathbf{E}}}{\partial t} & = \frac{4\pi}{c}\vec{\mathbf{j}} \\
+\nabla \cdot \vec{\mathbf{E}} & = 4 \pi \rho \\
+\nabla \times \vec{\mathbf{E}}\, +\, \frac1c\, \frac{\partial\vec{\mathbf{B}}}{\partial t} & = \vec{\mathbf{0}} \\
+\nabla \cdot \vec{\mathbf{B}} & = 0
+\end{align}
+$$
+
+## Code Sections
+
+Here's a simple Python function:
+
+```python
+def fibonacci(n):
+    a, b = 0, 1
+    for _ in range(n):
+        yield a
+        a, b = b, a + b
+
+# Generate the first 10 Fibonacci numbers
+fib_sequence = list(fibonacci(10))
+print(fib_sequence)  # [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
+```
+
+And some JavaScript:
+
+```javascript
+function createCounter() {
+    let count = 0;
+    return {
+        increment: () => ++count,
+        decrement: () => --count,
+        getCount: () => count
+    };
+}
+
+const counter = createCounter();
+console.log(counter.getCount());  // 0
+counter.increment();
+console.log(counter.getCount());  // 1
+```
+
+## Images
+
+Here's an example of how to include an image:
+
+![Sample Image](https://via.placeholder.com/600x400)
+
+## GIFs
+
+GIFs work the same way as regular images:
+
+![Sample GIF](https://via.placeholder.com/400x300)
+
+## Tables
+
+| Name     | Age | Occupation    |
+|----------|-----|---------------|
+| Alice    | 28  | Developer     |
+| Bob      | 35  | Designer      |
+| Charlie  | 42  | Project Manager |
+
+## Conclusion
+
+This post demonstrates all the features supported by this blog. Feel free to use this as a reference when creating your own posts.

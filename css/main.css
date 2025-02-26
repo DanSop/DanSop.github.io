@@ -1,0 +1,210 @@
+/* Base */
+:root {
+  --background-color: #fafafa;
+  --text-color: #222;
+  --link-color: #2a7ae2;
+  --border-color: #e8e8e8;
+  --code-background: #f6f8fa;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background-color: #222;
+    --text-color: #eee;
+    --link-color: #79b8ff;
+    --border-color: #444;
+    --code-background: #2d2d2d;
+  }
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 18px;
+  line-height: 1.6;
+  color: var(--text-color);
+  background-color: var(--background-color);
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  margin: 1.5rem 0 1rem;
+  line-height: 1.25;
+}
+
+h1 { font-size: 2em; }
+h2 { font-size: 1.5em; }
+h3 { font-size: 1.25em; }
+
+p, ul, ol, blockquote {
+  margin-bottom: 1.2rem;
+}
+
+a {
+  color: var(--link-color);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Code */
+pre, code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.9em;
+  background-color: var(--code-background);
+  border-radius: 3px;
+}
+
+code {
+  padding: 0.2em 0.4em;
+}
+
+pre {
+  padding: 1rem;
+  overflow-x: auto;
+  margin-bottom: 1.2rem;
+}
+
+pre code {
+  padding: 0;
+  background-color: transparent;
+}
+
+/* Layout */
+.container {
+  max-width: 100%;
+}
+
+.site-header {
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+}
+
+.site-title {
+  font-size: 1.8em;
+  margin-bottom: 0.5rem;
+}
+
+.site-title a {
+  color: var(--text-color);
+}
+
+.site-nav {
+  margin-top: 0.5rem;
+}
+
+.site-nav a {
+  margin-right: 1rem;
+}
+
+.content {
+  min-height: 60vh;
+}
+
+.site-footer {
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+  font-size: 0.9em;
+  color: #777;
+}
+
+/* Posts */
+.post-preview {
+  margin-bottom: 2.5rem;
+}
+
+.post-date {
+  display: block;
+  color: #777;
+  font-size: 0.9em;
+  margin-bottom: 0.5rem;
+}
+
+.post-title {
+  margin-bottom: 0.3rem;
+}
+
+.read-more {
+  display: inline-block;
+  margin-top: 0.5rem;
+}
+
+.post-content {
+  margin-top: 1.5rem;
+}
+
+.post-content img, .post-content video, .post-content iframe {
+  max-width: 100%;
+  height: auto;
+  margin: 1rem 0;
+  display: block;
+}
+
+.post-footer {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.post-tags {
+  margin-bottom: 1rem;
+}
+
+.post-tag {
+  background-color: var(--code-background);
+  padding: 0.2rem 0.5rem;
+  border-radius: 3px;
+  margin-right: 0.5rem;
+  font-size: 0.9em;
+}
+
+.post-navigation {
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Blockquotes */
+blockquote {
+  border-left: 4px solid var(--border-color);
+  padding-left: 1rem;
+  color: #777;
+  font-style: italic;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.2rem;
+}
+
+th, td {
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+}
+
+th {
+  background-color: var(--code-background);
+}
+
+/* Lists */
+ul, ol {
+  padding-left: 1.5rem;
+}
+
+/* MathJax */
+.math {
+  overflow-x: auto;
+}

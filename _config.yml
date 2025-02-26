@@ -1,23 +1,25 @@
-title: My Minimalistic Portfolio
-description: A clean and minimalistic website for my articles
+title: DanSop's Blog
+description: A minimalist blog supporting markdown, LaTeX, code, and media
+url: "" 
 baseurl: ""
-url: "https://DanSop.github.io"
+
 markdown: kramdown
+highlighter: rouge
 kramdown:
   math_engine: mathjax
+  syntax_highlighter: rouge
+
+paginate: 5
+paginate_path: "/page/:num/"
+
+defaults:
+  - scope:
+      path: ""
+      type: "posts"
+    values:
+      layout: "post"
+      permalink: "/posts/:title/"
+
 plugins:
+  - jekyll-paginate
   - jekyll-feed
-
-exclude:
-  - Gemfile
-  - Gemfile.lock
-  - node_modules
-  - vendor/bundle/
-  - vendor/cache/
-  - vendor/gems/
-  - vendor/ruby/
-
-collections:
-  articles:
-    output: true
-    permalink: /articles/:path/
