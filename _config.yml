@@ -1,17 +1,28 @@
+# Site settings
 title: DanSop's Blog
 description: A minimalist blog supporting markdown, LaTeX, code, and media
-url: "" 
-baseurl: ""
+url: "" # Add your GitHub Pages URL here (e.g., https://dansop.github.io)
+baseurl: "" # Leave empty if using a custom domain, or add repository name if not
 
+# Build settings
 markdown: kramdown
 highlighter: rouge
 kramdown:
   math_engine: mathjax
   syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    css_class: 'highlight'
+    span:
+      line_numbers: false
+    block:
+      line_numbers: false
+      start_line: 1
 
+# Pagination
 paginate: 5
 paginate_path: "/page/:num/"
 
+# Defaults
 defaults:
   - scope:
       path: ""
@@ -20,6 +31,7 @@ defaults:
       layout: "post"
       permalink: "/posts/:title/"
 
+# Plugins
 plugins:
   - jekyll-paginate
   - jekyll-feed

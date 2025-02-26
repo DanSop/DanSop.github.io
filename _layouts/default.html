@@ -5,11 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% if page.title %}{{ page.title }} - {{ site.title }}{% else %}{{ site.title }}{% endif %}</title>
   <link rel="stylesheet" href="{{ '/css/main.css' | relative_url }}">
-  <!-- MathJax for LaTeX support -->
+  
+  <!-- MathJax for LaTeX support with improved inline math configuration -->
   <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script>
+    MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        processEscapes: true
+      },
+      options: {
+        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+      }
+    };
+  </script>
   <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  
   <!-- Theme toggle script -->
   <script src="{{ '/js/theme.js' | relative_url }}"></script>
+  
+  <!-- Syntax Highlighting (Rouge) -->
+  <link rel="stylesheet" href="{{ '/css/syntax.css' | relative_url }}">
 </head>
 <body>
   <div class="container">
