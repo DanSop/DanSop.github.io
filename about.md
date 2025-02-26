@@ -14,6 +14,6 @@ Mainly work in embedded firmware/hardware engineering with an emphasis on low le
 
 ## Contact
 
-Inquiries - dannysoppit@gmail.com
-[GitHub](github.com/dansop)\
-[LinkedIn](https://www.linkedin.com/in/danny-soppit/)\
+Inquiries - dannysoppit@gmail.com <br>
+[GitHub](github.com/dansop) <br>
+[LinkedIn](https://www.linkedin.com/in/danny-soppit/)
