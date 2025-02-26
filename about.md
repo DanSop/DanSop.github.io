@@ -6,15 +6,14 @@ permalink: /about/
 
 # About Me
 
-Hello! I'm DanSop, and this is my personal blog where I write about topics that interest me.
+Mainly work in embedded firmware/hardware engineering with an emphasis on low level and mathematical applications.
 
-## Interests
+## Various Future Topics 
 
-- Technology
-- Mathematics
-- Programming
-- [Your other interests]
+- Ins and outs of low level devices
 
 ## Contact
 
-Feel free to reach out to me at [your email or social media links].
+[GitHub](github.com/dansop)
+[LinkedIn](https://www.linkedin.com/in/danny-soppit/)
+[Inquiries](dannysoppit@gmail.com)

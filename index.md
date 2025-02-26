@@ -3,6 +3,6 @@ layout: home
 title: Home
 ---
 
-# Welcome to My Blog
+# Info
 
-This is a minimalist blog where I share my thoughts and ideas on various topics. Feel free to explore the articles below.
+This is a minimalist blog where articles are made on things I find interesting or wish to write about.

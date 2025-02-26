@@ -1,4 +1,4 @@
-/* Light theme syntax highlighting (Github-like) */
+/* Light theme syntax highlighting*/
 :root {
   --syntax-comment: #6a737d;
   --syntax-keyword: #d73a49;
@@ -44,7 +44,7 @@
   overflow-x: auto;
 }
 
-/* Line Numbers (optional - enabled in _config.yml with line_numbers: true) */
+/* Line Numbers */
 .highlight .lineno {
   color: var(--syntax-comment);
   display: inline-block;

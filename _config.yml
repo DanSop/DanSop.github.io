@@ -1,8 +1,8 @@
 # Site settings
-title: DanSop's Blog
-description: A minimalist blog supporting markdown, LaTeX, code, and media
-url: "" # Add your GitHub Pages URL here (e.g., https://dansop.github.io)
-baseurl: "" # Leave empty if using a custom domain, or add repository name if not
+title: Danny's Website
+description: A minimalist blog supporting markdown, LaTeX, code, etc...
+url: ""
+baseurl: ""
 
 # Build settings
 markdown: kramdown
