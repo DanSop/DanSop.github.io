@@ -6,11 +6,12 @@ permalink: /about/
 
 # About Me
 
-Mainly work in embedded firmware/hardware engineering with an emphasis on low level and mathematical applications.
+I mainly work in embedded firmware/hardware engineering with an emphasis on low level and mathematical applications.
 
 ## Various Future Topics 
 
 - Ins and outs of low level devices
+- DSP & Signal processing
 
 ## Contact
 
