@@ -1,23 +1,37 @@
-title: My Minimalistic Portfolio
-description: A clean and minimalistic website for my articles
+# Site settings
+title: Danny's Website
+description: A minimalist blog supporting markdown, LaTeX, code, etc...
+url: ""
 baseurl: ""
-url: "https://DanSop.github.io"
+
+# Build settings
 markdown: kramdown
+highlighter: rouge
 kramdown:
   math_engine: mathjax
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    css_class: 'highlight'
+    span:
+      line_numbers: false
+    block:
+      line_numbers: false
+      start_line: 1
+
+# Pagination
+paginate: 5
+paginate_path: "/page/:num/"
+
+# Defaults
+defaults:
+  - scope:
+      path: ""
+      type: "posts"
+    values:
+      layout: "post"
+      permalink: "/posts/:title/"
+
+# Plugins
 plugins:
+  - jekyll-paginate
   - jekyll-feed
-
-exclude:
-  - Gemfile
-  - Gemfile.lock
-  - node_modules
-  - vendor/bundle/
-  - vendor/cache/
-  - vendor/gems/
-  - vendor/ruby/
-
-collections:
-  articles:
-    output: true
-    permalink: /articles/:path/
