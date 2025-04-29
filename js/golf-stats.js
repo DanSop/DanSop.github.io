@@ -3,15 +3,10 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // This should be replaced with real data & should be a json in the future or changed so I dont have to edit this file everytime...
   const golfScores = [
-    { date: '2025-04-10', course: 'Pine Valley', score: 82, courseRating: 71.5, slopeRating: 135 },
-    { date: '2025-03-25', course: 'Oak Hills', score: 85, courseRating: 70.2, slopeRating: 128 },
-    { date: '2025-03-12', course: 'Meadow Creek', score: 80, courseRating: 69.8, slopeRating: 122 },
-    { date: '2025-02-28', course: 'Pine Valley', score: 83, courseRating: 71.5, slopeRating: 135 },
-    { date: '2025-02-15', course: 'Harbor Links', score: 87, courseRating: 72.0, slopeRating: 140 },
-    { date: '2025-01-30', course: 'Oak Hills', score: 84, courseRating: 70.2, slopeRating: 128 },
-    { date: '2025-01-15', course: 'Meadow Creek', score: 81, courseRating: 69.8, slopeRating: 122 },
-    { date: '2025-01-02', course: 'Harbor Links', score: 88, courseRating: 72.0, slopeRating: 140 }
+    { date: '2025-04-27', course: 'Fairmont Hot Springs - Mountainside', score: 86, courseRating: 69.6, slopeRating: 119 },
+    { date: '2025-04-26', course: 'Fairmont Hot Springs - Riverside', score: 94, courseRating: 71.7, slopeRating: 123 }
   ];
+
 
   golfScores.sort((a, b) => new Date(b.date) - new Date(a.date));
 
