@@ -24,6 +24,10 @@
   <script src="{{ '/js/theme.js' | relative_url }}"></script>
   
   <link rel="stylesheet" href="{{ '/css/syntax.css' | relative_url }}">
+  {% if page.title == "Golf Scores" %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="{{ '/js/golf-stats.js' | relative_url }}"></script>
+  {% endif %}
 </head>
 <body>
   <div class="container">
@@ -33,6 +37,7 @@
         <nav class="site-nav">
           <a href="{{ '/' | relative_url }}">Home</a>
           <a href="{{ '/about' | relative_url }}">About</a>
+          <a href="{{ '/golf' | relative_url }}">Golf</a>
         </nav>
       </div>
       <button id="theme-toggle" class="theme-toggle">🌙 Dark</button>
