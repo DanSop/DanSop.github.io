@@ -1,7 +1,7 @@
 // golf-stats.js
 document.addEventListener('DOMContentLoaded', function() {
   
-  // This should be replaced with real data
+  // This should be replaced with real data & should be a json in the future or changed so I dont have to edit this file everytime...
   const golfScores = [
     { date: '2025-04-10', course: 'Pine Valley', score: 82, courseRating: 71.5, slopeRating: 135 },
     { date: '2025-03-25', course: 'Oak Hills', score: 85, courseRating: 70.2, slopeRating: 128 },
