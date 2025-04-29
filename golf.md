@@ -9,7 +9,7 @@ permalink: /golf/
 <div class="golf-stats-container">
   <div class="stats-summary">
     <div class="handicap-display">
-      <h2>Current Handicap</h2>
+      <h2>Handicap Index</h2>
       <div class="handicap-value" id="current-handicap">Loading...</div>
     </div>
     <div class="quick-stats">
