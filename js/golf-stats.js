@@ -1,6 +1,6 @@
 // golf-stats.js
 document.addEventListener('DOMContentLoaded', function() {
-  // Sample golf data - in a real implementation, you would load this from a JSON file or API
+  // Sample golf data - replace with your actual golf scores
   const golfScores = [
     { date: '2025-04-10', course: 'Pine Valley', score: 82, courseRating: 71.5, slopeRating: 135 },
     { date: '2025-03-25', course: 'Oak Hills', score: 85, courseRating: 70.2, slopeRating: 128 },
@@ -101,8 +101,14 @@ function createScoreChart(scores) {
   // Reverse scores for chronological order in chart
   const chartScores = [...scores].reverse();
   
+  // Get the theme mode to use appropriate colors
+  const isDarkMode = document.documentElement.dataset.theme === 'dark';
+  const textColor = isDarkMode ? '#eee' : '#222';
+  const gridColor = isDarkMode ? '#444' : '#e8e8e8';
+  const chartColor = isDarkMode ? '#79b8ff' : '#2a7ae2';
+  
   const ctx = document.getElementById('scoreChart').getContext('2d');
-  new Chart(ctx, {
+  const scoreChart = new Chart(ctx, {
     type: 'line',
     data: {
       labels: chartScores.map(round => {
@@ -112,34 +118,83 @@ function createScoreChart(scores) {
       datasets: [{
         label: 'Score',
         data: chartScores.map(round => round.score),
-        borderColor: '#3e95cd',
-        backgroundColor: 'rgba(62, 149, 205, 0.1)',
+        borderColor: chartColor,
+        backgroundColor: `${chartColor}20`,
         tension: 0.1,
         fill: true
       }]
     },
     options: {
       responsive: true,
+      maintainAspectRatio: false,
       scales: {
         y: {
           reverse: true,
           title: {
             display: true,
-            text: 'Score'
+            text: 'Score',
+            color: textColor
+          },
+          grid: {
+            color: gridColor
+          },
+          ticks: {
+            color: textColor
           }
         },
         x: {
           title: {
             display: true,
-            text: 'Date'
+            text: 'Date',
+            color: textColor
+          },
+          grid: {
+            color: gridColor
+          },
+          ticks: {
+            color: textColor
           }
         }
       },
       plugins: {
         legend: {
           display: false
+        },
+        tooltip: {
+          backgroundColor: isDarkMode ? '#333' : 'rgba(255, 255, 255, 0.8)',
+          titleColor: isDarkMode ? '#fff' : '#222',
+          bodyColor: isDarkMode ? '#fff' : '#222',
+          borderColor: isDarkMode ? '#444' : '#ddd',
+          borderWidth: 1
         }
       }
     }
+  });
+  
+  // Update chart colors when theme changes
+  document.getElementById('theme-toggle').addEventListener('click', function() {
+    setTimeout(() => {
+      const newIsDarkMode = document.documentElement.dataset.theme === 'dark';
+      const newTextColor = newIsDarkMode ? '#eee' : '#222';
+      const newGridColor = newIsDarkMode ? '#444' : '#e8e8e8';
+      const newChartColor = newIsDarkMode ? '#79b8ff' : '#2a7ae2';
+      
+      scoreChart.data.datasets[0].borderColor = newChartColor;
+      scoreChart.data.datasets[0].backgroundColor = `${newChartColor}20`;
+      
+      scoreChart.options.scales.y.title.color = newTextColor;
+      scoreChart.options.scales.y.grid.color = newGridColor;
+      scoreChart.options.scales.y.ticks.color = newTextColor;
+      scoreChart.options.scales.x.title.color = newTextColor;
+      scoreChart.options.scales.x.grid.color = newGridColor;
+      scoreChart.options.scales.x.ticks.color = newTextColor;
+      
+      scoreChart.options.plugins.tooltip.backgroundColor = newIsDarkMode ? '#333' : 'rgba(255, 255, 255, 0.8)';
+      scoreChart.options.plugins.tooltip.titleColor = newIsDarkMode ? '#fff' : '#222';
+      scoreChart.options.plugins.tooltip.bodyColor = newIsDarkMode ? '#fff' : '#222';
+      scoreChart.options.plugins.tooltip.borderColor = newIsDarkMode ? '#444' : '#ddd';
+      
+      scoreChart.update();
+    }, 100);
   });
 }
