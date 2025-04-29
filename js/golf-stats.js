@@ -1,6 +1,7 @@
 // golf-stats.js
 document.addEventListener('DOMContentLoaded', function() {
-  // Sample golf data - replace with your actual golf scores
+  
+  // This should be replaced with real data
   const golfScores = [
     { date: '2025-04-10', course: 'Pine Valley', score: 82, courseRating: 71.5, slopeRating: 135 },
     { date: '2025-03-25', course: 'Oak Hills', score: 85, courseRating: 70.2, slopeRating: 128 },
@@ -12,27 +13,20 @@ document.addEventListener('DOMContentLoaded', function() {
     { date: '2025-01-02', course: 'Harbor Links', score: 88, courseRating: 72.0, slopeRating: 140 }
   ];
 
-  // Sort scores by date (newest first)
   golfScores.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  // Calculate score differentials for each round
   golfScores.forEach(round => {
     round.differential = calculateDifferential(round.score, round.courseRating, round.slopeRating);
   });
 
-  // Populate the scores table
   populateScoresTable(golfScores);
 
-  // Calculate and display handicap
   const handicap = calculateHandicap(golfScores);
   document.getElementById('current-handicap').textContent = handicap.toFixed(1);
 
-  // Update summary stats
   document.getElementById('rounds-played').textContent = golfScores.length;
   document.getElementById('best-score').textContent = Math.min(...golfScores.map(round => round.score));
   document.getElementById('avg-score').textContent = (golfScores.reduce((sum, round) => sum + round.score, 0) / golfScores.length).toFixed(1);
-
-  // Create score trend chart
   createScoreChart(golfScores);
 });
 
@@ -43,11 +37,9 @@ function calculateDifferential(score, courseRating, slopeRating) {
 
 // Calculate handicap index based on score differentials
 function calculateHandicap(rounds) {
-  // Get differentials in ascending order
   const differentials = rounds.map(round => round.differential).sort((a, b) => a - b);
-  
-  // Determine how many differentials to use based on number of rounds
   let countToUse = 0;
+
   if (differentials.length <= 5) {
     countToUse = 1;
   } else if (differentials.length <= 8) {
@@ -63,14 +55,15 @@ function calculateHandicap(rounds) {
   } else {
     countToUse = Math.round(differentials.length * 0.4);
   }
-  
+
   // Calculate average of lowest differentials
   const lowestDifferentials = differentials.slice(0, countToUse);
   const avgDifferential = lowestDifferentials.reduce((sum, diff) => sum + diff, 0) / countToUse;
-  
-  // Apply handicap formula (multiply by 0.96 and truncate to one decimal)
-  return Math.round(avgDifferential * 0.96 * 10) / 10;
+
+  // Return average directly rounded to one decimal 
+  return Math.round(avgDifferential * 10) / 10;
 }
+
 
 // Populate scores table
 function populateScoresTable(scores) {
@@ -171,7 +164,6 @@ function createScoreChart(scores) {
     }
   });
   
-  // Update chart colors when theme changes
   document.getElementById('theme-toggle').addEventListener('click', function() {
     setTimeout(() => {
       const newIsDarkMode = document.documentElement.dataset.theme === 'dark';
