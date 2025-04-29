@@ -13,6 +13,9 @@ Mainly work in embedded firmware/hardware engineering with an emphasis on low le
 - Ins and outs of low level devices
 - DSP & Signal processing
 
+## Golf
+I include my golf scores on this website as well for all eyes to see.
+
 ## Contact
 
 Inquiries - dannysoppit@gmail.com <br>
