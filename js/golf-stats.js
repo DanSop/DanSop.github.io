@@ -4,6 +4,8 @@ document.addEventListener('DOMContentLoaded', function() {
   // This should be replaced with real data & should be a json in the future or changed so I dont have to edit this file everytime...
   // !TODO fix me for caching, Edit the default.html version date as well to enforce an update
   const golfScores = [
+    { date: '2025-06-22', course: 'Fairmont Hot Springs - Mountainside', score: 88, courseRating: 69.6, slopeRating: 119},
+    { date: '2025-06-21', course: 'Radium - The Springs course', score: 84, courseRating: 70.3, slopeRating: 123},
     { date: '2025-05-31', course: 'Silvertip Resort', score: 89, courseRating: 69.9, slopeRating: 140},
     { date: '2025-05-30', course: 'Fox Hollow', score: 84, courseRating: 68.3, slopeRating: 120},
     { date: '2025-05-25', course: 'Apple Creek', score: 85, courseRating: 70.0, slopeRating: 110 },
