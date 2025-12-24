@@ -264,4 +264,4 @@ typedef struct
 
 For this example, we would want to ensure that the hot data object is placed in the fastest cache possible. We can think of cache from the hot/cold perspective as "hot data VIP lounge" as this cache space is very expensive and limited therefore only the hottest data can get it. This also relates to another topic called "Cold Start" where when a system first starts the cache is empty therefore all requests for hot data result in cache misses, forcing the system to go all the way back to cold data (you can also pre-heat the cache so that it does not have misses on startup).  
 
-Remember, always to play with your cache.
+Remember, always play with your cache.
