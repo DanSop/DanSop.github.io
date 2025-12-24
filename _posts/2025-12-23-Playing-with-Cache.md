@@ -20,7 +20,9 @@ This article dives into several memory optimization techniques that I've picked 
 
 When a CPU needs to read some data from the memory, it is typically done in the smallest fixed-size unit possible (typically 64 bytes). Instead of fetching individual bytes of memory from a slower external RAM or shared RAM, the processor will bring in this entire line containing the requested data to a faster local memory region. The idea is simple, fetching one byte at a time would be slow, so instead let's just snag up the whole block and store it nearby. This block of data is what we call a cache line.
 
-![Picture of a CPU/Cache setup.](/content/a1/a1_p1.svg)
+<p align="center">
+  <img src="/content/a1/a1_p1.svg" alt="Picture of a CPU/Cache setup.">
+</p>
 
 Note that for the diagram I showed the L1 and the L2 cache being localized to the core and L3 being shared. This is a fairly typical setup for modern day architectures but it is still a generic example. We can have false/true sharing between the L1 cache and L3 cache, L2 cache and L3 cache, and even L(x) cache (as long as it is localized to the core) and any external RAM that is added to the system.
 
@@ -32,7 +34,9 @@ False sharing on the other hand is the exact... same... thing? Now rather than m
 
 Let me reiterate this, the hardware is doing exactly what it's supposed to do, but in this specific case it's unintentional and causes a pretty big performance hit. A lovely diagram of the cache line being shared is shown below:
 
-![Picture of a Cache Line.](/content/a1/a1_p2.svg)
+<p align="center">
+  <img src="/content/a1/a1_p2.svg" alt="Picture of a Cache Line.">
+</p>
 
 To quickly summarize, **False Sharing** is when two or more cores are working on independent variables or data that is stored on the same cache line. Each separate core will invalidate the cache line when the data is changed, therefore the respective core that did not update its own variable and invalidate the cache will be forced to fetch this cache line again if it wants to operate on its own variable. More fetches = slower execution  = slop.
 
@@ -167,7 +171,9 @@ This is fine for my simple example, but can you imagine doing this for 10+ struc
 
 The upside of padding? It's bulletproof portable. Padding works on literally every C compiler ever made. MSVC, GCC, Clang, some ancient Mesopotamian compiler, yup, padding will work. Nonetheless I still recommend using the compiler attributes for a modern approach.
 
-![Picture of a padding vs attribute.](/content/a1/a1_p3.svg)
+<p align="center">
+  <img src="/content/a1/a1_p3.svg" alt="Picture of a padding vs attribute.">
+</p>
 
 ## Cache Invalidation vs Write-Back
 
@@ -191,7 +197,9 @@ We first look at the case where the cache is newer than the memory. A write-back
 
 A DMA allows data to flow from a peripheral directly into memory (or vice versa) while ignoring the CPU. We can think of the flow as going from Disk -> RAM rather than Disk -> CPU -> RAM. We can think of the DMA being "blind" to the CPU's cache, which creates two major risks that require cleaning and invalidation.
 
-![Picture of a generic DMA setup.](/content/a1/a1_p4.svg)
+<p align="center">
+  <img src="/content/a1/a1_p4.svg" alt="Picture of a generic DMA setup.">
+</p>
 
 Imagine core 0 has a piece of data in its L1 cache. Meanwhile, a DMA controller writes a new version of data directly into the main memory. Core 0 does not know that the memory has changed externally and keeps its old and stale cached version. Therefore to fix this, the system must invalidate that cache line so the CPU is forced to fetch the new data from RAM.
 
