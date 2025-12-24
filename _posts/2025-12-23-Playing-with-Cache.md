@@ -32,7 +32,7 @@ False sharing on the other hand is the exact... same... thing? Now rather than m
 
 Let me reiterate this, the hardware is doing exactly what it's supposed to do, but in this specific case it's unintentional and causes a pretty big performance hit. A lovely diagram of the cache line being shared is shown below:
 
-![Picture of a Cache Line.](/content/a1/a1_p2.png)
+![Picture of a Cache Line.](/content/a1/a1_p2.svg)
 
 To quickly summarize, **False Sharing** is when two or more cores are working on independent variables or data that is stored on the same cache line. Each separate core will invalidate the cache line when the data is changed, therefore the respective core that did not update its own variable and invalidate the cache will be forced to fetch this cache line again if it wants to operate on its own variable. More fetches = slower execution  = slop.
 
@@ -167,7 +167,7 @@ This is fine for my simple example, but can you imagine doing this for 10+ struc
 
 The upside of padding? It's bulletproof portable. Padding works on literally every C compiler ever made. MSVC, GCC, Clang, some ancient Mesopotamian compiler, yup, padding will work. Nonetheless I still recommend using the compiler attributes for a modern approach.
 
-![Picture of a padding vs attribute.](/content/a1/a1_p3.png)
+![Picture of a padding vs attribute.](/content/a1/a1_p3.svg)
 
 ## Cache Invalidation vs Write-Back
 
@@ -191,7 +191,7 @@ We first look at the case where the cache is newer than the memory. A write-back
 
 A DMA allows data to flow from a peripheral directly into memory (or vice versa) while ignoring the CPU. We can think of the flow as going from Disk -> RAM rather than Disk -> CPU -> RAM. We can think of the DMA being "blind" to the CPU's cache, which creates two major risks that require cleaning and invalidation.
 
-![Picture of a generic DMA setup.](/content/a1/a1_p4.png)
+![Picture of a generic DMA setup.](/content/a1/a1_p4.svg)
 
 Imagine core 0 has a piece of data in its L1 cache. Meanwhile, a DMA controller writes a new version of data directly into the main memory. Core 0 does not know that the memory has changed externally and keeps its old and stale cached version. Therefore to fix this, the system must invalidate that cache line so the CPU is forced to fetch the new data from RAM.
 
