@@ -5,7 +5,7 @@ date: 2025-12-23
 tags: [markdown, latex, code]
 ---
 
- A general note since this is the first article posted... these articles are meant to be more of a "blog-style" read. That is, they won't have the formality of a research paper and will be much more casual. The topics will (for the most part) still be technical in nature, and each post will be written entirely by myself, a genuine, living, human author. Since I am STEM brained individual please read at your own discretion.
+ A general note since this is the first article posted... these articles are meant to be more of a "blog-style" read. That is, they won't have the formality of a research paper and will be much more casual. The topics will (for the most part) still be technical in nature. Since I am STEM brained individual please read at your own discretion.
 
 This article dives into several memory optimization techniques that I've picked up or have seen from working on several projects. The following are the topics that I found interesting and associated with cache/memory optimization and usage. The applications will focus on more resource-constrained systems such as embedded systems, but both examples will likely be provided (if I get around to doing both).
 
@@ -171,7 +171,7 @@ This manual padding works, but it looks fairly gross and comes with some potenti
 
 This is fine for my simple example, but can you imagine doing this for 10+ structures with a massive amount of elements containing other structures? This calculation starts to be cumbersome and furthermore if any variable is added to this structure in the future the padding has to be recalculated. The math gets annoying fast and your coworkers might yell at you if they have to pull out a calculator everytime they want to add an element to a structure.
 
-The upside of padding? It's bulletproof portable. Padding works on literally every C compiler ever made. MSVC, GCC, Clang, some ancient Mesopotamian compiler, yup, padding will work. Nonetheless I still recommend using the compiler attributes for a modern approach.
+The upside of padding? It's bulletproof portable. Padding works on literally every C compiler ever made. MSVC, GCC, Clang, etc... nonetheless I still recommend using the compiler attributes for a modern approach.
 
 <p align="center">
   <img src="/content/a1/a1_p3.svg"><br>
@@ -262,6 +262,4 @@ typedef struct
 } cold_object;
 ```
 
-For this example, we would want to ensure that the hot data object is placed in the fastest cache possible. We can think of cache from the hot/cold perspective as "hot data VIP lounge" as this cache space is very expensive and limited therefore only the hottest data can get it. This also relates to another topic called "Cold Start" where when a system first starts the cache is empty therefore all requests for hot data result in cache misses, forcing the system to go all the way back to cold data (you can also pre-heat the cache so that it does not have misses on startup).  
-
-Remember, always play with your cache.
+For this example, we would want to ensure that the hot data object is placed in the fastest cache possible. This also relates to another topic called "Cold Start" where when a system first starts the cache is empty therefore all requests for hot data result in cache misses, forcing the system to go all the way back to cold data (you can also pre-heat the cache so that it does not have misses on startup).  
