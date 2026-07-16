@@ -16,7 +16,7 @@ This article dives into several memory optimization techniques that I've picked 
 
 ## True and False Sharing
 
-**False sharing** is a term associated with a specific type of performance bottleneck in modern parallel programming. It will occur when two (or more) processors inadvertently fight or attempt to access the same single piece of hardware memory. For our case we will focus on the hardware memory being a cache line. But first! Some extremely simplified and very generic background information on how a CPU typically talks to RAM and its association with the cache line.
+False sharing is a term associated with a specific type of performance bottleneck in modern parallel programming. It will occur when two (or more) processors inadvertently fight or attempt to access the same single piece of hardware memory. For our case we will focus on the hardware memory being a cache line. But first! Some extremely simplified and very generic background information on how a CPU typically talks to RAM and its association with the cache line.
 
 When a CPU needs to read some data from the memory, it is typically done in the smallest fixed-size unit possible (typically 64 bytes). Instead of fetching individual bytes of memory from a slower external RAM or shared RAM, the processor will bring in this entire line containing the requested data to a faster local memory region. The idea is simple, fetching one byte at a time would be slow, so instead let's just snag up the whole block and store it nearby. This block of data is what we call a cache line.
 
@@ -148,7 +148,7 @@ This tells us more information about the performance impact on false sharing as 
 
 ## Padding
 
-Great, you discovered false sharing is the bane of your existence and it is causing you major performance issues. I've already shown you once solution by using compiler atrributes to ensure data structures are 64 byte aligned, but there is also another common practice I have seen to fix this issue. This next section, **padding**, is the other common practice to fix false sharing.
+Great, you discovered false sharing is the bane of your existence and it is causing you major performance issues. I've already shown you once solution by using compiler atrributes to ensure data structures are 64 byte aligned, but there is also another common practice I have seen to fix this issue. This next section, padding, is the other common practice to fix false sharing.
 
 I want to put a note here that I recommend using the compiler attribute for aligning memory rather than padding, as they are functionally the same but padding could potentially become unreadable for a future developer.
 
@@ -171,7 +171,7 @@ This manual padding works, but it looks fairly gross and comes with some potenti
 
 This is fine for my simple example, but can you imagine doing this for 10+ structures with a massive amount of elements containing other structures? This calculation starts to be cumbersome and furthermore if any variable is added to this structure in the future the padding has to be recalculated. The math gets annoying fast and your coworkers might yell at you if they have to pull out a calculator everytime they want to add an element to a structure.
 
-The upside of padding? It's bulletproof portable. Padding works on literally every C compiler ever made. MSVC, GCC, Clang, etc... nonetheless I still recommend using the compiler attributes for a modern approach.
+The upside of padding? It's portable. Padding works on literally every C compiler ever made. MSVC, GCC, Clang, etc... nonetheless I still recommend using the compiler attributes for a modern approach.
 
 <p align="center">
   <img src="/content/a1/a1_p3.svg"><br>
@@ -187,7 +187,7 @@ The only way to restore reality for this CPU is to use two blunt tools provided 
 - Write-Back (clean)
 - Invalidation
 
-These are not optimizations, they are correctness mechanisms and getting them wrong produces bugs that ignore most debuggers and will likely disappear under logging. Only reappearing at the worst possible time. We must understand why these operations exist in the first place, and how they are related to cache.
+These are not optimizations bur rather correctness mechanisms and getting them wrong produces bugs that ignore most debuggers and will likely disappear under logging. Only reappearing at the worst possible time. We must understand why these operations exist in the first place, and how they are related to cache.
 
 #### Two Fundamental Cache Issues
 
@@ -211,7 +211,7 @@ Now if we look at this problem from a different angle, if the CPU has modified d
 
 You may be wondering, well what the hell when we looked at false sharing those cores had cache coherency that automatically performed the L1 cache hits and automatically updated data for the cores (at a cost of performance of course). So why are we having to do this invalidation and write-back manually now? 
 
-To answer this as generically as possible, it comes down to **Cache Coherency**... the gift that keeps giving. Cache coherency does not mean, "memory always updates itself everywhere to the newest version", a better explanation is:
+To answer this as generically as possible, it comes down to Cache Coherenc*... the gift that keeps giving. Cache coherency does not mean, "memory always updates itself everywhere to the newest version", a better explanation is:
 
 > Cache coherency relies on participants to agree on the value of a cache line when they talk through a coherency fabric
 
