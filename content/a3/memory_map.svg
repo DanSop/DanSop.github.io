@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="660" height="302" viewBox="0 0 660 302">
+<text x="185" y="22" font-family="Arial, Helvetica, sans-serif" font-size="12" text-anchor="middle" font-weight="bold" fill="#000">Flash</text>
+<rect x="110" y="32" width="150" height="28" fill="#fff" stroke="#000" stroke-width="1"/>
+<text x="185" y="50.0" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#000">.isr_vector</text>
+<text x="104" y="36" font-family="Arial, Helvetica, sans-serif" font-size="9" text-anchor="end" font-weight="normal" fill="#000">0x0800 0000</text>
+<rect x="110" y="60" width="150" height="70" fill="#fff" stroke="#000" stroke-width="1"/>
+<text x="185" y="99.0" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#000">.text / .rodata</text>
+<text x="104" y="64" font-family="Arial, Helvetica, sans-serif" font-size="9" text-anchor="end" font-weight="normal" fill="#000">0x0800 0010</text>
+<rect x="110" y="130" width="150" height="28" fill="#fff" stroke="#000" stroke-width="1"/>
+<text x="185" y="148.0" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#000">.data (load copy)</text>
+<text x="104" y="134" font-family="Arial, Helvetica, sans-serif" font-size="9" text-anchor="end" font-weight="normal" fill="#000">0x0800 0078</text>
+<rect x="110" y="158" width="150" height="120" fill="#d9d9d9" stroke="#000" stroke-width="1"/>
+<text x="185" y="222.0" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#000">Free</text>
+<text x="104" y="162" font-family="Arial, Helvetica, sans-serif" font-size="9" text-anchor="end" font-weight="normal" fill="#000">0x0800 007C</text>
+<text x="104" y="282" font-family="Arial, Helvetica, sans-serif" font-size="9" text-anchor="end" font-weight="normal" fill="#000">0x0801 0000</text>
+<text x="475" y="22" font-family="Arial, Helvetica, sans-serif" font-size="12" text-anchor="middle" font-weight="bold" fill="#000">SRAM</text>
+<rect x="400" y="32" width="150" height="28" fill="#fff" stroke="#000" stroke-width="1"/>
+<text x="475" y="50.0" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#000">.data</text>
+<text x="556" y="36" font-family="Arial, Helvetica, sans-serif" font-size="9" text-anchor="start" font-weight="normal" fill="#000">0x2000 0000</text>
+<rect x="400" y="60" width="150" height="28" fill="#fff" stroke="#000" stroke-width="1"/>
+<text x="475" y="78.0" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#000">.bss (zeroed at reset)</text>
+<text x="556" y="64" font-family="Arial, Helvetica, sans-serif" font-size="9" text-anchor="start" font-weight="normal" fill="#000">0x2000 0004</text>
+<rect x="400" y="88" width="150" height="130" fill="#d9d9d9" stroke="#000" stroke-width="1"/>
+<text x="475" y="157.0" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#000">Free</text>
+<text x="556" y="92" font-family="Arial, Helvetica, sans-serif" font-size="9" text-anchor="start" font-weight="normal" fill="#000">0x2000 0008</text>
+<rect x="400" y="218" width="150" height="60" fill="#fff" stroke="#000" stroke-width="1"/>
+<text x="475" y="252.0" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#000">Stack</text>
+<text x="556" y="282" font-family="Arial, Helvetica, sans-serif" font-size="9" text-anchor="start" font-weight="normal" fill="#000">0x2000 2000</text>
+<path d="M 262,144.0 L 398,46.0" fill="none" stroke="#000" stroke-width="1" stroke-dasharray="4 3"/><path d="M 398.0,46.0 L 389.2,47.4 L 393.8,53.9 z" fill="#000"/>
+<text x="345" y="126" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="middle" font-weight="normal" fill="#000">copied at reset</text>
+</svg>

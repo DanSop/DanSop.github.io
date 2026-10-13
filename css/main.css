@@ -2,6 +2,7 @@
   --bg: #fffffc;
   --text: #1a1a1a;
   --muted: #6b6b6b;
+  --secondary: #555555;
   --link: #1f4e9c;
   --rule: #d8d8d4;
   --code-bg: #f4f4f0;
@@ -16,6 +17,7 @@
   --text: #d2d2d0;
   --heading: #e8e8e6;
   --muted: #9b9b98;
+  --secondary: #b4b4b1;
   --link: #d4a86a;
   --rule: #3a3a3a;
   --code-bg: #262626;
@@ -162,7 +164,7 @@ tbody tr:last-child td {
   letter-spacing: 0.04em;
 }
 .site-nav a {
-  color: var(--muted);
+  color: var(--secondary);
   margin: 0 0.6rem;
   text-transform: lowercase;
 }
@@ -205,7 +207,12 @@ tbody tr:last-child td {
   margin: 0.2rem 0 0;
   font-size: 0.85rem;
   line-height: 1.55;
-  color: var(--muted);
+  color: var(--secondary);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
 }
 
 .page-about {
@@ -234,6 +241,10 @@ tbody tr:last-child td {
 .post-content p[align="center"] {
   font-size: 0.9rem;
   margin: 1.75rem 0;
+}
+.post-content p[align="center"] small {
+  font-size: 0.8em;
+  color: var(--muted);
 }
 .post-content p[align="center"] img {
   margin-bottom: 0.4rem;

@@ -2,7 +2,6 @@
 layout: post
 title: "Playing with My Cache"
 date: 2025-12-23
-tags: [markdown, latex, code]
 ---
 
 We will be diving into several memory optimization techniques that I've picked up or have seen from working on several projects. The following are the topics that I found interesting and associated with cache/memory optimization and usage. The applications will focus on more resource-constrained systems such as embedded systems, but both examples will likely be provided (if I get around to doing both).
