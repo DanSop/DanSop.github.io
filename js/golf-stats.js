@@ -1,4 +1,3 @@
-// Rounds live in _data/golf.yml and are embedded into the golf page at build time.
 document.addEventListener('DOMContentLoaded', function () {
   const rounds = JSON.parse(document.getElementById('golf-data').textContent);
 
@@ -21,7 +20,6 @@ function calculateDifferential(score, courseRating, slopeRating) {
   return ((score - courseRating) * 113) / slopeRating;
 }
 
-// Average of the lowest N differentials, N per the WHS table
 function calculateHandicap(rounds) {
   const differentials = rounds.map(r => r.differential).sort((a, b) => a - b);
   const n = differentials.length;

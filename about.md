@@ -4,7 +4,7 @@ title: About
 permalink: /about/
 ---
 
-## About Me
+## Background
 
 Electrical engineer by trade, working across hardware, firmware and software, with a strong foundation in math and a focus on applied theory. I was building hardware and software from a young age, long before it became a career.
 

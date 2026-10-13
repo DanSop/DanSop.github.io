@@ -1,4 +1,3 @@
-// The initial theme is set inline in <head> (default.html) to avoid a flash.
 function currentTheme() {
   return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
 }

@@ -1,10 +1,8 @@
-# Site settings
-title: Danny's Website
+title: Analog Daydreams
 description: A minimalist blog supporting markdown, LaTeX, code, etc...
 url: ""
 baseurl: ""
 
-# Build settings
 markdown: kramdown
 highlighter: rouge
 kramdown:
@@ -18,7 +16,6 @@ kramdown:
       line_numbers: false
       start_line: 1
 
-# Defaults
 defaults:
   - scope:
       path: ""
@@ -27,6 +24,5 @@ defaults:
       layout: "post"
       permalink: "/posts/:title/"
 
-# Plugins
 plugins:
   - jekyll-feed
