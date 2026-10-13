@@ -230,7 +230,7 @@ tbody tr:last-child td {
   padding: 0;
 }
 .post-list li {
-  margin: 0 0 1.4rem;
+  margin: 0 0 1.8rem;
 }
 .post-list time {
   display: block;
@@ -239,6 +239,12 @@ tbody tr:last-child td {
 }
 .post-list a {
   font-size: 1.15rem;
+}
+.post-summary {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--muted);
 }
 
 /* Post */

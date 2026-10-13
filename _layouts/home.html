@@ -6,6 +6,7 @@ layout: default
   <li>
     <time datetime="{{ post.date | date_to_xmlschema }}">{{ post.date | date: "%Y %b %d" }}</time>
     <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
+    <p class="post-summary">{{ post.description | default: post.excerpt | strip_html | normalize_whitespace | truncatewords: 35 }}</p>
   </li>
   {% endfor %}
 </ul>
