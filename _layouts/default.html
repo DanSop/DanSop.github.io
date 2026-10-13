@@ -1,12 +1,26 @@
+{%- assign v = site.time | date: '%s' -%}
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% if page.title %}{{ page.title }} - {{ site.title }}{% else %}{{ site.title }}{% endif %}</title>
-  <link rel="stylesheet" href="{{ '/css/main.css' | relative_url }}">
-  
-  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <title>{% if page.title and page.layout != 'home' %}{{ page.title }} - {{ site.title }}{% else %}{{ site.title }}{% endif %}</title>
+  <meta name="description" content="{{ page.excerpt | default: site.description | strip_html | strip_newlines | truncate: 160 }}">
+
+  <script>
+    (function () {
+      var t = null;
+      try { t = localStorage.getItem('theme'); } catch (e) {}
+      if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/latex.css@1.12.0/fonts/LM-regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="{{ '/css/main.css' | relative_url }}?v={{ v }}">
+  <link rel="stylesheet" href="{{ '/css/syntax.css' | relative_url }}?v={{ v }}">
+  {% feed_meta %}
+
   <script>
     MathJax = {
       tex: {
@@ -15,41 +29,35 @@
         processEscapes: true
       },
       options: {
-        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
       }
     };
   </script>
-  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-  
-  <script src="{{ '/js/theme.js' | relative_url }}"></script>
-  
-  <link rel="stylesheet" href="{{ '/css/syntax.css' | relative_url }}">
-  {% if page.title == "Golf Scores" %}
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="{{ '/js/golf-stats.js?v=1.0.9' | relative_url }}"></script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
+
+  <script defer src="{{ '/js/theme.js' | relative_url }}?v={{ v }}"></script>
+  {% if page.golf %}
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+  <script defer src="{{ '/js/golf-stats.js' | relative_url }}?v={{ v }}"></script>
   {% endif %}
 </head>
 <body>
-  <div class="container">
-    <header class="site-header">
-      <div>
-        <h1 class="site-title"><a href="{{ '/' | relative_url }}">{{ site.title }}</a></h1>
-        <nav class="site-nav">
-          <a href="{{ '/' | relative_url }}">Home</a>
-          <a href="{{ '/about' | relative_url }}">About</a>
-          <a href="{{ '/golf' | relative_url }}">Golf</a>
-        </nav>
-      </div>
-      <button id="theme-toggle" class="theme-toggle">🌙 Dark</button>
-    </header>
-    
-    <main class="content">
-      {{ content }}
-    </main>
-    
-    <footer class="site-footer">
-      <p>&copy; {{ site.time | date: '%Y' }} {{ site.title }}</p>
-    </footer>
-  </div>
+  <header class="site-header">
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">dark</button>
+    <h1 class="site-title"><a href="{{ '/' | relative_url }}">{{ site.title }}</a></h1>
+    <nav class="site-nav">
+      <a href="{{ '/' | relative_url }}">Home</a>
+      <a href="{{ '/about/' | relative_url }}">About</a>
+      <a href="{{ '/golf/' | relative_url }}">Golf</a>
+    </nav>
+  </header>
+
+  <main class="content">
+    {{ content }}
+  </main>
+
+  <footer class="site-footer">
+    &copy; {{ site.time | date: '%Y' }} {{ site.title }}
+  </footer>
 </body>
 </html>

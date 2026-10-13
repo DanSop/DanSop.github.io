@@ -34,9 +34,9 @@
 
 /* Base styles for code blocks */
 .highlight {
-  background: var(--code-background);
+  background: var(--code-bg);
   border-radius: 4px;
-  margin-bottom: 1.2rem;
+  margin-bottom: 1.1rem;
 }
 
 .highlight pre {
@@ -49,7 +49,7 @@
   color: var(--syntax-comment);
   display: inline-block;
   padding: 0 0.5em;
-  border-right: 1px solid var(--border-color);
+  border-right: 1px solid var(--rule);
   text-align: right;
   -webkit-user-select: none;
   -moz-user-select: none;
@@ -70,7 +70,7 @@
   font-weight: bold;
 }
 .highlight .o, .highlight .ow { color: var(--syntax-operator); }
-.highlight .p, .highlight .pi { color: var(--text-color); }
+.highlight .p, .highlight .pi { color: var(--text); }
 .highlight .gd { color: var(--syntax-error); }
 .highlight .gi { color: var(--syntax-tag); }
 .highlight .s, .highlight .sa, .highlight .sb, .highlight .sc, .highlight .dl, .highlight .sd, .highlight .s2, .highlight .sh, .highlight .sx, .highlight .s1 { 

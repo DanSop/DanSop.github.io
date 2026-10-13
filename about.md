@@ -4,14 +4,9 @@ title: About
 permalink: /about/
 ---
 
-# About Me
+## About Me
 
-Mainly work in embedded firmware/hardware engineering with an emphasis on low level and mathematical applications.
-
-## Various Future Topics 
-
-- Ins and outs of low level devices
-- DSP & Signal processing
+Firmware/hardware/software engineer.
 
 ## Golf
 I include my golf scores on this website as well for all eyes to see.

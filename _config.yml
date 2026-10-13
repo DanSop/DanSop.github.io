@@ -18,10 +18,6 @@ kramdown:
       line_numbers: false
       start_line: 1
 
-# Pagination
-paginate: 5
-paginate_path: "/page/:num/"
-
 # Defaults
 defaults:
   - scope:
@@ -33,5 +29,4 @@ defaults:
 
 # Plugins
 plugins:
-  - jekyll-paginate
   - jekyll-feed

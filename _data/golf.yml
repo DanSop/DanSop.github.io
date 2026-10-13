@@ -1,0 +1,11 @@
+# Add a new round here; order doesn't matter (sorted by date on the page).
+- { date: "2025-09-05", course: "McCall Lake Golf Course", score: 91, rating: 65.8, slope: 110 }
+- { date: "2025-08-20", course: "McCall Lake Golf Course", score: 83, rating: 65.8, slope: 110 }
+- { date: "2025-06-22", course: "Fairmont Hot Springs - Mountainside", score: 88, rating: 69.6, slope: 119 }
+- { date: "2025-06-21", course: "Radium - The Springs course", score: 84, rating: 70.3, slope: 123 }
+- { date: "2025-05-31", course: "Silvertip Resort", score: 89, rating: 69.9, slope: 140 }
+- { date: "2025-05-30", course: "Fox Hollow", score: 84, rating: 68.3, slope: 120 }
+- { date: "2025-05-25", course: "Apple Creek", score: 85, rating: 70.0, slope: 110 }
+- { date: "2025-05-02", course: "Shaganappi Point", score: 81, rating: 62.9, slope: 110 }
+- { date: "2025-04-27", course: "Fairmont Hot Springs - Mountainside", score: 86, rating: 69.6, slope: 119 }
+- { date: "2025-04-26", course: "Fairmont Hot Springs - Riverside", score: 94, rating: 71.7, slope: 123 }

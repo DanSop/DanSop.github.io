@@ -5,9 +5,7 @@ date: 2025-12-23
 tags: [markdown, latex, code]
 ---
 
- A general note since this is the first article posted... these articles are meant to be more of a "blog-style" read. That is, they won't have the formality of a research paper and will be much more casual. The topics will (for the most part) still be technical in nature. Since I am STEM brained individual please read at your own discretion.
-
-This article dives into several memory optimization techniques that I've picked up or have seen from working on several projects. The following are the topics that I found interesting and associated with cache/memory optimization and usage. The applications will focus on more resource-constrained systems such as embedded systems, but both examples will likely be provided (if I get around to doing both).
+We will be diving into several memory optimization techniques that I've picked up or have seen from working on several projects. The following are the topics that I found interesting and associated with cache/memory optimization and usage. The applications will focus on more resource-constrained systems such as embedded systems, but both examples will likely be provided (if I get around to doing both).
 
 - True and False Sharing
 - Padding

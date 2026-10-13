@@ -1,19 +1,11 @@
 ---
 layout: default
 ---
-<div class="home">
-  {{ content }}
-  
-  <div class="posts">
-    {% for post in site.posts %}
-    <article class="post-preview">
-      <h2 class="post-title">
-        <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
-      </h2>
-      <time class="post-date" datetime="{{ post.date | date_to_xmlschema }}">{{ post.date | date: "%B %d, %Y" }}</time>
-      <div class="post-excerpt">{{ post.excerpt }}</div>
-      <a class="read-more" href="{{ post.url | relative_url }}">Read more</a>
-    </article>
-    {% endfor %}
-  </div>
-</div>
+<ul class="post-list">
+  {% for post in site.posts %}
+  <li>
+    <time datetime="{{ post.date | date_to_xmlschema }}">{{ post.date | date: "%Y %b %d" }}</time>
+    <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
+  </li>
+  {% endfor %}
+</ul>

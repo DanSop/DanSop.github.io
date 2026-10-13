@@ -2,53 +2,36 @@
 layout: default
 title: Golf Scores
 permalink: /golf/
+golf: true
 ---
 
-# My Golf Scores
+# Golf
 
-<div class="golf-stats-container">
-  <div class="stats-summary">
-    <div class="handicap-display">
-      <h2>Handicap Index</h2>
-      <div class="handicap-value" id="current-handicap">Loading...</div>
-    </div>
-    <div class="quick-stats">
-      <div class="stat-box">
-        <span class="stat-label">Rounds Played</span>
-        <span class="stat-value" id="rounds-played">0</span>
-      </div>
-      <div class="stat-box">
-        <span class="stat-label">Best Score</span>
-        <span class="stat-value" id="best-score">--</span>
-      </div>
-      <div class="stat-box">
-        <span class="stat-label">Avg. Score</span>
-        <span class="stat-value" id="avg-score">--</span>
-      </div>
-    </div>
-  </div>
-  
-  <div class="chart-container">
-    <h3>Score Trends</h3>
-    <canvas id="scoreChart"></canvas>
-  </div>
-  
-  <div class="scores-table-container">
-    <h3>Recent Rounds</h3>
-    <table class="scores-table" id="scores-table">
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Course</th>
-          <th>Score</th>
-          <th>Course Rating</th>
-          <th>Slope Rating</th>
-          <th>Differential</th>
-        </tr>
-      </thead>
-      <tbody id="scores-body">
-        <!-- Scores will be populated here -->
-      </tbody>
-    </table>
-  </div>
+<div class="golf-summary">
+  <div class="handicap"><span class="value" id="current-handicap">--</span><span class="label">Handicap Index</span></div>
+  <div><span class="value" id="rounds-played">--</span><span class="label">Rounds</span></div>
+  <div><span class="value" id="best-score">--</span><span class="label">Best</span></div>
+  <div><span class="value" id="avg-score">--</span><span class="label">Average</span></div>
 </div>
+
+<div class="chart-container">
+  <canvas id="scoreChart" aria-label="Score trend"></canvas>
+</div>
+
+<div class="table-wrap">
+  <table class="scores-table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Course</th>
+        <th>Score</th>
+        <th>Rating</th>
+        <th>Slope</th>
+        <th>Diff.</th>
+      </tr>
+    </thead>
+    <tbody id="scores-body"></tbody>
+  </table>
+</div>
+
+<script id="golf-data" type="application/json">{{ site.data.golf | jsonify }}</script>
