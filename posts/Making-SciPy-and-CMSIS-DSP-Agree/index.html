@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Making SciPy and CMSIS-DSP Agree - Analog Daydreams</title>
+  <meta name="description" content="Designing a filter in Python takes about three lines. Getting a microcontroller to run that same filter in fixed point, and actually produce the same output,...">
+
+  <script>
+    (function () {
+      var theme;
+      try { theme = localStorage.getItem('theme'); } catch (e) {}
+      document.documentElement.dataset.theme = theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,700;1,7..72,400;1,7..72,700&display=swap">
+  <link rel="stylesheet" href="/css/main.css?v=1795129781">
+  <link rel="stylesheet" href="/css/syntax.css?v=1795129781">
+  <link type="application/atom+xml" rel="alternate" href="https://dansop.github.io/feed.xml" title="Analog Daydreams" />
+  <script>
+    MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous"></script>
+
+  <script type="module" src="/js/theme.js?v=1795129781"></script>
+</head>
+<body>
+  <header class="site-header">
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">dark</button>
+    <h1 class="site-title"><a href="/">Analog Daydreams</a></h1>
+    <nav class="site-nav">
+      <a href="/">Home</a>
+      <a href="/about/">About</a>
+      <a href="/golf/">Golf</a>
+    </nav>
+  </header>
+
+  <main>
+    <article class="post">
+  <header class="post-header">
+    <h1 class="post-title">Making SciPy and CMSIS-DSP Agree</h1>
+    <time class="post-date" datetime="2024-04-20T00:00:00+00:00">April 20, 2024</time>
+  </header>
+
+  <div class="post-content">
+    <p>Designing a filter in Python takes about three lines. Getting a microcontroller to run that same filter in fixed point, and actually produce the same output, is where the afternoon goes. The filter in SciPy is the map (exact coefficients, 64-bit floats, no opinions), and the one running in Q31 on a Cortex-M is the territory. I put together <a href="https://github.com/DanSop/CMSIS-DSP-with-SciPy-Example">a small project</a> to check one against the other: SciPy designs a six band equalizer, the coefficients get converted to Q31, and the exact same coefficients are run through ARM’s CMSIS-DSP library so the two outputs can be compared side by side.</p>
+
+<p>The bank is octave spaced at a 16 kHz sample rate, with band centres from 100 Hz up to 3.2 kHz. Each band edge sits at the geometric mean of two neighbouring centres, so the first band runs from 70.7 Hz to 141.4 Hz, the next from 141.4 Hz to 282.8 Hz, and so on up to 4.5 kHz. Every band is a third-order Butterworth bandpass, which turns into a sixth-order filter once the lowpass prototype is mapped onto a band.</p>
+
+<figure>
+  <img src="/content/a6/filter-bank.svg" alt="Magnitude response in dB of six octave-spaced Butterworth bandpass filters from about 70 Hz to 4.5 kHz, with the responses rebuilt from the Q31 coefficients drawn dashed on top of the floating point ones" />
+  <figcaption><b>Figure 1:</b> The six band filter bank, floating point and Q31.</figcaption>
+</figure>
+
+<h2 id="one-section-or-three">One Section or Three</h2>
+
+<p>SciPy will happily hand you that sixth-order filter as a single transfer function, seven numerator and seven denominator coefficients, and CMSIS-DSP would happily run it as one long difference equation. It is the lowest band that makes this a bad idea. A band from 70.7 Hz to 141.4 Hz is less than one percent of the sample rate wide, therefore all six poles crowd into a tiny patch of the z-plane just inside \(z = 1\), and the polynomial they come from has coefficients as large as 19.4. To fit that into Q31 every coefficient has to be scaled down by \(2^5\), which leaves a resolution of \(2^{-26}\), about \(1.5 \times 10^{-8}\).</p>
+
+<p>That sounds like plenty. Rounding the seven denominator coefficients to that grid and solving for the roots again gives the orange crosses in Figure 2. One pair of poles lands at \(\lvert z \rvert = 1.00076\), outside the unit circle, and a real pole lands exactly on \(z = 1\). A filter with a pole outside the unit circle is unstable, so the single-section version of band 1 does not survive the conversion at all (it would ring up from the first sample and never come back down).</p>
+
+<figure>
+  <img src="/content/a6/band1-poles.svg" alt="Pole positions for band 1 near z = 1. The poles of the three Q31 biquads sit inside the unit circle where they were designed, while the single sixth-order section rounded to Q31 has a pair of poles just outside the circle at magnitude 1.00076 and a real pole on the circle" />
+  <figcaption><b>Figure 2:</b> Band 1 poles after rounding to Q31, three biquads against one sixth-order section.</figcaption>
+</figure>
+
+<p>Split into three second-order sections, biquads, the same band has coefficients no bigger than about 2, and each section only has to place its own pair of poles. After rounding to Q31 the biquad poles match the design to six decimal places, with the largest still sitting at \(\lvert z \rvert = 0.995129\). The higher bands are much less touchy; by band 6 the single-section poles do not move in the first six decimal places. It is purely the poles bunched up near \(z = 1\) that cannot take the rounding, which is the usual reason every fixed-point IIR filter ends up as a cascade of biquads.</p>
+
+<h2 id="the-postshift">The Postshift</h2>
+
+<p>Even the biquads do not fit Q31 directly. Q31 only holds values in \([-1, 1)\), and in the lowest band the first feedback coefficient is about 1.97. CMSIS-DSP’s answer is the postshift: every coefficient is divided by \(2^{\text{postShift}}\) before it is converted, and the library shifts each stage’s result back up by the same number of bits. With a postshift of 4 everything fits with room to spare:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">coefs</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">hstack</span><span class="p">((</span><span class="n">sos</span><span class="p">[:,</span> <span class="p">:</span><span class="mi">3</span><span class="p">],</span> <span class="o">-</span><span class="n">sos</span><span class="p">[:,</span> <span class="mi">4</span><span class="p">:])),</span> <span class="mi">15</span><span class="p">)</span>
+<span class="n">coefs</span> <span class="o">=</span> <span class="n">coefs</span> <span class="o">/</span> <span class="p">(</span><span class="n">POSTSHIFT</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+<span class="n">coefsQ31</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nb">round</span><span class="p">(</span><span class="n">coefs</span> <span class="o">*</span> <span class="p">(</span><span class="mi">2</span> <span class="o">**</span> <span class="mi">31</span><span class="p">))</span>
+</code></pre></div></div>
+
+<p>Two details in there are easy to get wrong. CMSIS-DSP expects the feedback coefficients with the opposite sign to SciPy, hence the <code class="language-plaintext highlighter-rouge">-sos[:, 4:]</code>, and it does not want the leading \(a_0\) at all, which is why only five of SciPy’s six numbers per section survive. Dividing by <code class="language-plaintext highlighter-rouge">POSTSHIFT ** 2</code> also only works because \(4^2\) happens to equal \(2^4\) (the general form is <code class="language-plaintext highlighter-rouge">2 ** POSTSHIFT</code>).</p>
+
+<p>The rounding to 31 bits barely moves the response. The dashed lines in Figure 1 are rebuilt from the rounded Q31 coefficients and sit right on top of the floating point ones, with the worst difference inside any passband at 0.005 dB.</p>
+
+<h2 id="32-or-64-bits-of-state">32 or 64 Bits of State</h2>
+
+<p>The coefficients are only half of it. In CMSIS-DSP’s Q31 biquad, <code class="language-plaintext highlighter-rouge">arm_biquad_cascade_df1_q31</code>, every section accumulates in 64 bits but truncates its output back down to 32 bits before it is stored and fed into the next section. The variant <code class="language-plaintext highlighter-rouge">arm_biquad_cas_df1_32x64_q31</code> keeps that state at 64 bits instead, for more cycles and twice the state memory. My C code uses the 64-bit version for the three lowest bands and the plain one for the rest, and the comment beside it just says “improved noise performance”, so I measured it.</p>
+
+<p>The test runs a sine at the centre of each band through both CMSIS-DSP functions, with the input scaled down by 8 the same way the C code does for headroom, and compares the output against SciPy running the <em>same rounded coefficients</em> in floating point. With the coefficients identical on both sides, the only difference left is the arithmetic. Skipping the first half second while the filters settle, Figure 3 shows the signal-to-noise ratio for a quiet input at -60 dBFS (measured before the divide by 8).</p>
+
+<figure>
+  <img src="/content/a6/state-noise.svg" alt="Bar chart of SNR at -60 dBFS per band for 32-bit and 64-bit state. At 100 Hz the 32-bit state gives 31 dB and the 64-bit state 92 dB; the gap shrinks with frequency until the two are within 2 dB at 3.2 kHz" />
+  <figcaption><b>Figure 3:</b> SNR at -60 dBFS for each band, 32-bit and 64-bit state.</figcaption>
+</figure>
+
+<p>In the 100 Hz band the 32-bit state gives 31 dB, against 92 dB for the 64-bit state, so the cheaper function throws away 61 dB on a quiet signal. The gap shrinks band by band, 32 dB at 200 Hz and 29 dB at 800 Hz, until at 3.2 kHz the two are within 2 dB of each other. Louder signals hide it somewhat (at -6 dBFS band 1 still goes from 91 dB to 148 dB), but quiet passages are exactly where a noise floor gets heard. The reason is the same poles as before: the closer a pole sits to the unit circle, the longer the filter keeps recirculating every rounding error it makes, and nothing sits closer than band 1.</p>
+
+<p>So the lowest band is where everything concentrates. As one section it does not survive the rounding at all, and with 32-bit state it gives up 61 dB on a quiet input. The 3.2 kHz band would not have noticed either mistake.</p>
+
+  </div>
+  <nav class="post-nav">
+    <a class="prev" rel="prev" href="/posts/The-Absurd-and-the-Undefined/">&larr; The Absurd and the Undefined</a>
+    <a class="next" rel="next" href="/posts/Playing-with-My-Cache/">Playing with My Cache &rarr;</a>
+  </nav>
+</article>
+
+  </main>
+</body>
+</html>

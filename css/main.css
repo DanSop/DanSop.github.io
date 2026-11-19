@@ -1,0 +1,356 @@
+:root {
+  --bg: #fffffc;
+  --text: #1a1a1a;
+  --heading: #111111;
+  --muted: #6b6b6b;
+  --secondary: #555555;
+  --link: #1f4e9c;
+  --accent: var(--link);
+  --rule: #d8d8d4;
+  --code-bg: #f4f4f0;
+  --trace: rgba(150, 95, 40, 0.22);
+  --serif: "Literata", Georgia, Cambria, "Times New Roman", serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  --measure: 44rem;
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg: #1e1e1e;
+  --text: #d2d2d0;
+  --heading: #e8e8e6;
+  --muted: #9b9b98;
+  --secondary: #b4b4b1;
+  --link: #d4a86a;
+  --rule: #3a3a3a;
+  --code-bg: #262626;
+  --trace: rgba(205, 140, 75, 0.16);
+  color-scheme: dark;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 17px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0 auto;
+  max-width: var(--measure);
+  padding: 2.5rem 1.25rem 3rem;
+  font-family: var(--serif);
+  line-height: 1.65;
+  letter-spacing: 0.01em;
+  font-kerning: normal;
+  text-rendering: optimizeLegibility;
+  color: var(--text);
+  background: var(--bg);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  margin: 2rem 0 0.75rem;
+  line-height: 1.25;
+  color: var(--heading);
+}
+h1 { font-size: 1.8rem; }
+h2 { font-size: 1.4rem; }
+h3 { font-size: 1.2rem; }
+h4, h5, h6 { font-size: 1rem; }
+h6 { font-style: italic; }
+
+p, ul, ol, blockquote, pre, table, figure {
+  margin: 0 0 1.1rem;
+}
+
+ul, ol {
+  padding-left: 1.5rem;
+}
+li + li {
+  margin-top: 0.2rem;
+}
+
+a {
+  color: var(--link);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+hr {
+  margin: 2rem 0;
+  border: 0;
+  border-top: 1px solid var(--rule);
+}
+
+blockquote {
+  margin-left: 0;
+  padding-left: 1rem;
+  border-left: 2px solid var(--rule);
+  color: var(--muted);
+  font-style: italic;
+}
+
+img, svg, video, iframe {
+  max-width: 100%;
+  height: auto;
+}
+
+code, pre, kbd {
+  font-family: var(--mono);
+  font-size: 0.8em;
+}
+code {
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+  background: var(--code-bg);
+}
+pre {
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+  line-height: 1.5;
+  border-radius: 3px;
+  background: var(--code-bg);
+}
+pre code {
+  padding: 0;
+  font-size: inherit;
+  background: none;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+th, td {
+  padding: 0.35rem 0.6rem;
+  text-align: left;
+}
+thead th {
+  border-top: 1.5px solid var(--text);
+  border-bottom: 1px solid var(--text);
+}
+tbody tr:last-child td {
+  border-bottom: 1.5px solid var(--text);
+}
+
+mjx-container[display="true"] {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.site-header {
+  position: relative;
+  margin-bottom: 2.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--rule);
+  text-align: center;
+}
+.site-title {
+  margin: 0 0 0.4rem;
+  font-size: 1.6rem;
+}
+.site-title a {
+  color: var(--heading);
+}
+.site-title a:hover {
+  text-decoration: none;
+}
+.site-nav {
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+}
+.site-nav a {
+  margin: 0 0.6rem;
+  color: var(--secondary);
+  text-transform: lowercase;
+}
+.site-nav a:hover {
+  color: var(--text);
+}
+.theme-toggle {
+  position: absolute;
+  top: -1.5rem;
+  right: 0;
+  padding: 0.2rem;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.8rem;
+  font-variant: small-caps;
+  color: var(--muted);
+  cursor: pointer;
+}
+.theme-toggle:hover {
+  color: var(--text);
+}
+
+.post-list {
+  padding: 0;
+  list-style: none;
+}
+.post-list li {
+  margin: 0 0 1.8rem;
+}
+.post-list time {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.post-list a {
+  font-size: 1.15rem;
+}
+.post-summary {
+  display: -webkit-box;
+  margin: 0.2rem 0 0;
+  overflow: hidden;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--secondary);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.post-header {
+  margin-bottom: 2.5rem;
+  text-align: center;
+}
+.post-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.9rem;
+}
+.post-date {
+  font-style: italic;
+  color: var(--muted);
+}
+.post-content,
+.about {
+  font-size: calc(1rem - 1px);
+}
+.post-content figure {
+  margin: 1.75rem 0;
+  font-size: 0.9rem;
+  text-align: center;
+}
+.post-content figure img {
+  margin-bottom: 0.4rem;
+}
+.post-content figure img[src$=".svg"] {
+  width: 100%;
+}
+.post-content figcaption small {
+  font-size: 0.8em;
+  color: var(--muted);
+}
+[data-theme="dark"] .post-content img[src$=".svg"],
+[data-theme="dark"] .post-content img.invert-dark {
+  filter: invert(0.88) hue-rotate(180deg);
+}
+.post-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+}
+.post-nav .next {
+  margin-left: auto;
+}
+
+.about h2 {
+  margin-top: 1.75rem;
+  font-size: 1.15rem;
+}
+
+.golf-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin: 1.5rem 0 2.5rem;
+  text-align: center;
+}
+.golf-summary div {
+  display: flex;
+  flex-direction: column;
+}
+.golf-summary .value {
+  font-size: 1.6rem;
+  font-weight: bold;
+}
+.golf-summary .label {
+  font-size: 0.8rem;
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  color: var(--muted);
+}
+.golf-summary .handicap .value {
+  color: var(--accent);
+}
+.chart-container {
+  position: relative;
+  height: 280px;
+  margin: 0 0 2.5rem;
+}
+.table-wrap {
+  overflow-x: auto;
+}
+.scores-table {
+  font-size: 0.85rem;
+}
+.scores-table td:first-child {
+  white-space: nowrap;
+}
+.scores-table td:nth-child(n+3),
+.scores-table th:nth-child(n+3) {
+  text-align: right;
+}
+
+/* Circuit traces in the side margins on wide screens */
+
+@media (min-width: 1150px) {
+  html::before,
+  html::after {
+    content: "";
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    width: calc(50% - var(--measure) / 2 - 2rem);
+    background-color: var(--trace);
+    -webkit-mask-position: right top;
+    mask-position: right top;
+    -webkit-mask-repeat: repeat-y;
+    mask-repeat: repeat-y;
+    pointer-events: none;
+  }
+  html::before {
+    left: 0;
+    -webkit-mask-image: url("pcb-left.svg");
+    mask-image: url("pcb-left.svg");
+  }
+  html::after {
+    right: 0;
+    transform: scaleX(-1);
+    -webkit-mask-image: url("pcb-right.svg");
+    mask-image: url("pcb-right.svg");
+  }
+}
+
+@media (max-width: 600px) {
+  html {
+    font-size: 16px;
+  }
+  body {
+    padding: 2rem 1rem;
+  }
+  .golf-summary {
+    grid-template-columns: repeat(2, 1fr);
+    row-gap: 1.25rem;
+  }
+}

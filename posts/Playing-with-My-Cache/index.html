@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Playing with My Cache - Analog Daydreams</title>
+  <meta name="description" content="We will be diving into several memory optimization techniques that I’ve picked up or have seen from working on several projects. The following are the topics...">
+
+  <script>
+    (function () {
+      var theme;
+      try { theme = localStorage.getItem('theme'); } catch (e) {}
+      document.documentElement.dataset.theme = theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,700;1,7..72,400;1,7..72,700&display=swap">
+  <link rel="stylesheet" href="/css/main.css?v=1795129781">
+  <link rel="stylesheet" href="/css/syntax.css?v=1795129781">
+  <link type="application/atom+xml" rel="alternate" href="https://dansop.github.io/feed.xml" title="Analog Daydreams" />
+  <script>
+    MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous"></script>
+
+  <script type="module" src="/js/theme.js?v=1795129781"></script>
+</head>
+<body>
+  <header class="site-header">
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">dark</button>
+    <h1 class="site-title"><a href="/">Analog Daydreams</a></h1>
+    <nav class="site-nav">
+      <a href="/">Home</a>
+      <a href="/about/">About</a>
+      <a href="/golf/">Golf</a>
+    </nav>
+  </header>
+
+  <main>
+    <article class="post">
+  <header class="post-header">
+    <h1 class="post-title">Playing with My Cache</h1>
+    <time class="post-date" datetime="2025-12-23T00:00:00+00:00">December 23, 2025</time>
+  </header>
+
+  <div class="post-content">
+    <p>We will be diving into several memory optimization techniques that I’ve picked up or have seen from working on several projects. The following are the topics that I found interesting and associated with cache/memory optimization and usage. The applications will focus on more resource-constrained systems such as embedded systems, but both examples will likely be provided (if I get around to doing both).</p>
+
+<ul>
+  <li>True and False Sharing</li>
+  <li>Padding</li>
+  <li>Cache Invalidation vs Write-Back</li>
+  <li>Hot/Cold Data</li>
+</ul>
+
+<h2 id="true-and-false-sharing">True and False Sharing</h2>
+
+<p>False sharing is a term associated with a specific type of performance bottleneck in modern parallel programming. It will occur when two (or more) processors inadvertently fight or attempt to access the same single piece of hardware memory. For our case we will focus on the hardware memory being a cache line. But first! Some extremely simplified and very generic background information on how a CPU typically talks to RAM and its association with the cache line.</p>
+
+<p>When a CPU needs to read some data from the memory, it is typically done in the smallest fixed-size unit possible (typically 64 bytes). Instead of fetching individual bytes of memory from a slower external RAM or shared RAM, the processor will bring in this entire line containing the requested data to a faster local memory region. The idea is simple, fetching one byte at a time would be slow, so instead let’s just snag up the whole block and store it nearby. This block of data is what we call a cache line.</p>
+
+<figure>
+  <img src="/content/a1/a1_p1.svg" alt="Two CPUs with private L1 and L2 caches holding copies of D1 and D2, kept consistent by cache coherency over a shared L3 cache" />
+  <figcaption><b>Figure 1:</b> Picture of a CPU/Cache setup.</figcaption>
+</figure>
+
+<p>Note that for the diagram I showed the L1 and the L2 cache being localized to the core and L3 being shared. This is a fairly typical setup for modern day architectures but it is still a generic example. We can have false/true sharing between the L1 cache and L3 cache, L2 cache and L3 cache, and even L(x) cache (as long as it is localized to the core) and any external RAM that is added to the system.</p>
+
+<p>Here is where the fun term “<strong>Cache Coherency</strong>” comes into play. This term will be used a lot so lets define it as a way of keeping data consistent across multiple cores and hence multiple threads/tasks. Each core has its own cache controller that manages this and it is entirely hardware driven (spoiler it is not, see cache cleaning for more on this).</p>
+
+<p>Now lets get back to that whole false sharing idea. If two cores need the same data, say <em>X</em>, when core 0 updates <em>X</em> in the external region of memory, core 1 must be notified so that its cache is updated to the new value (that whole cache coherency thing). Believe it or not this is called “<strong>True Sharing</strong>” as this is an intended implementation of the data as it is meant to be shared.</p>
+
+<p>False sharing on the other hand is the exact… same… thing? Now rather than my awful term “thing” let us describe this process as a mechanism. An unwanted application of this mechanism is when both cores end up working with different variables that just happen to sit on the same cache line; that whole damn cache coherency thingy treats the entire line as one unit, therefore when core 0 updates its variable/data, core 1’s cache line is invalidated or becomes stale even though it does not need the data that core 0 is updating. This means that poor ole core 1 has to fetch the cache line from the shared memory again wasting precious cycles and bandwidth.</p>
+
+<p>Let me reiterate this, the hardware is doing exactly what it’s supposed to do, but in this specific case it’s unintentional and causes a pretty big performance hit. A lovely diagram of the cache line being shared is shown below:</p>
+
+<figure>
+  <img src="/content/a1/a1_p2.svg" alt="One cache line holding both D1 and D2, shared between two L2 caches and the L3 cache" />
+  <figcaption><b>Figure 2:</b> Cache Line.</figcaption>
+</figure>
+
+<p>To quickly summarize, <strong>False Sharing</strong> is when two or more cores are working on independent variables or data that is stored on the same cache line. Each separate core will invalidate the cache line when the data is changed, therefore the respective core that did not update its own variable and invalidate the cache will be forced to fetch this cache line again if it wants to operate on its own variable. More fetches = slower execution  = slop.</p>
+
+<p>Now that is cool and all; lots of talking about RAM and cache and fun things, but lets see some real examples of <strong>True and False Sharing</strong>.</p>
+
+<h6 id="linuxgcc-false-sharing-example">Linux/GCC False Sharing Example</h6>
+
+<p>These examples were compiled using GCC and were intentionally simple. This program will spawn two threads that access data in a structure. For the first example we will show <strong>False Sharing</strong>:</p>
+
+<ul>
+  <li><strong>Example 1:</strong></li>
+</ul>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cp">#include</span> <span class="cpf">&lt;pthread.h&gt;</span><span class="cp">
+#include</span> <span class="cpf">&lt;stdio.h&gt;</span><span class="cp">
+#include</span> <span class="cpf">&lt;stdint.h&gt;</span><span class="cp">
+</span>
+<span class="cp">#define ITERATIONS 10000000
+</span>
+<span class="k">typedef</span> <span class="k">struct</span> 
+<span class="p">{</span> 
+  <span class="kt">uint64_t</span> <span class="n">value</span><span class="p">;</span> 
+  <span class="kt">uint32_t</span> <span class="n">id</span><span class="p">;</span> 
+<span class="p">}</span> <span class="n">Data</span><span class="p">;</span>
+
+<span class="k">struct</span> 
+<span class="p">{</span>
+  <span class="n">Data</span> <span class="n">d1</span><span class="p">;</span>
+  <span class="n">Data</span> <span class="n">d2</span><span class="p">;</span>
+<span class="p">}</span> <span class="n">cache_line</span> <span class="o">=</span> <span class="p">{</span> <span class="mi">0</span> <span class="p">};</span>  
+
+<span class="kt">void</span> <span class="o">*</span> <span class="nf">thread1</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span> <span class="n">arg</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="k">for</span><span class="p">(</span><span class="kt">int</span> <span class="n">i</span><span class="o">=</span><span class="mi">0</span><span class="p">;</span> <span class="n">i</span><span class="o">&lt;</span><span class="n">ITERATIONS</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> 
+  <span class="p">{</span>
+    <span class="n">cache_line</span><span class="p">.</span><span class="n">d1</span><span class="p">.</span><span class="n">value</span><span class="o">++</span><span class="p">;</span>
+    <span class="n">cache_line</span><span class="p">.</span><span class="n">d1</span><span class="p">.</span><span class="n">id</span><span class="o">=</span><span class="n">i</span><span class="p">;</span>
+  <span class="p">}</span>
+  <span class="k">return</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">void</span> <span class="o">*</span> <span class="nf">thread2</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span> <span class="n">arg</span><span class="p">)</span> 
+<span class="p">{</span>
+  <span class="k">for</span><span class="p">(</span><span class="kt">int</span> <span class="n">i</span><span class="o">=</span><span class="mi">0</span><span class="p">;</span> <span class="n">i</span><span class="o">&lt;</span><span class="n">ITERATIONS</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span>
+  <span class="p">{</span>
+    <span class="n">cache_line</span><span class="p">.</span><span class="n">d2</span><span class="p">.</span><span class="n">value</span><span class="o">++</span><span class="p">;</span>
+    <span class="n">cache_line</span><span class="p">.</span><span class="n">d2</span><span class="p">.</span><span class="n">id</span><span class="o">=</span><span class="n">i</span><span class="p">;</span>
+  <span class="p">}</span>
+  <span class="k">return</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">int</span> <span class="nf">main</span><span class="p">()</span> 
+<span class="p">{</span>
+  <span class="n">pthread_t</span> <span class="n">t1</span><span class="p">,</span><span class="n">t2</span><span class="p">;</span>
+  <span class="n">pthread_create</span><span class="p">(</span><span class="o">&amp;</span><span class="n">t1</span><span class="p">,</span><span class="nb">NULL</span><span class="p">,</span><span class="n">thread1</span><span class="p">,</span><span class="nb">NULL</span><span class="p">);</span>
+  <span class="n">pthread_create</span><span class="p">(</span><span class="o">&amp;</span><span class="n">t2</span><span class="p">,</span><span class="nb">NULL</span><span class="p">,</span><span class="n">thread2</span><span class="p">,</span><span class="nb">NULL</span><span class="p">);</span>
+  <span class="n">pthread_join</span><span class="p">(</span><span class="n">t1</span><span class="p">,</span><span class="nb">NULL</span><span class="p">);</span>
+  <span class="n">pthread_join</span><span class="p">(</span><span class="n">t2</span><span class="p">,</span><span class="nb">NULL</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>For the example above the two threads are accessing the same data structure ‘cache_line’ therefore there will be false sharing as both threads are trying to access the same variable.</p>
+
+<p>Now for the example without false sharing, all we do is simply change the cache_line structure’s data to be 64 byte aligned to force separate cache lines, resulting in no false sharing. To do this, we will use the compiler attribute <code class="language-plaintext highlighter-rouge">__attribute__((aligned(64))</code> that tells the compiler to place the variable at a memory address that’s a multiple of 64 bytes. Therefore we change the following code:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// rest of the program above...</span>
+<span class="k">struct</span> 
+<span class="p">{</span>
+  <span class="n">Data</span> <span class="n">d1</span> <span class="n">__attribute__</span><span class="p">((</span><span class="n">aligned</span><span class="p">(</span><span class="mi">64</span><span class="p">)));</span>
+  <span class="n">Data</span> <span class="n">d2</span> <span class="n">__attribute__</span><span class="p">((</span><span class="n">aligned</span><span class="p">(</span><span class="mi">64</span><span class="p">)));</span>
+<span class="p">}</span> <span class="n">cache_line</span> <span class="o">=</span> <span class="p">{</span> <span class="mi">0</span> <span class="p">};</span>
+<span class="c1">// rest of the program below...</span>
+</code></pre></div></div>
+
+<p>The result after compiling the applications and using <code class="language-plaintext highlighter-rouge">time</code> for both applications is the following:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">(</span>base<span class="o">)</span> danny@linux:<span class="nv">$ </span><span class="nb">time</span> ./no_sharing 
+real    0m0.017s
+user    0m0.032s
+sys     0m0.000s
+<span class="o">(</span>base<span class="o">)</span> danny@linux:<span class="nv">$ </span><span class="nb">time</span> ./false_sharing 
+real    0m0.038s
+user    0m0.061s
+sys     0m0.004s
+</code></pre></div></div>
+
+<p>Right away we can see the functionality of both programs are the same, but since one has the data structures aligned on 64 byte memory addresses this allows the local core specific cache to never be invalidated by another core, thus we see up to a ~50% performance increase in running this application as no false sharing is taking place.</p>
+
+<p>We can also look at the cache misses themselves through the usage of <code class="language-plaintext highlighter-rouge">perf</code> on Linux, resulting in the following information:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">(</span>base<span class="o">)</span> danny@linux:<span class="nv">$ </span><span class="nb">sudo </span>perf <span class="nb">stat</span> <span class="nt">-e</span> cache-references,cache-misses,L1-dcache-load-misses ./no_sharing
+
+55,489       cpu_core/cache-references/
+ 8,375       cpu_core/cache-misses/
+13,682       cpu_core/L1-dcache-load-misses/
+
+<span class="o">(</span>base<span class="o">)</span> danny@linux:<span class="nv">$ </span><span class="nb">sudo </span>perf <span class="nb">stat</span> <span class="nt">-e</span> cache-references,cache-misses,L1-dcache-load-misses ./false_sharing
+
+858,174      cpu_core/cache-references/
+  9,168      cpu_core/cache-misses/
+363,549      cpu_core/L1-dcache-load-misses/
+</code></pre></div></div>
+
+<p>This tells us more information about the performance impact on false sharing as it has nearly 17x more cache references and 33x more L1 cache misses. Mainly the important part here is the performance impact on the overall time, that is a direct result of the performance impact on the L1 data cache misses, as each thread is invalidating the other’s cache; the CPU is putting in overtime as it is constantly reloading the cache line from the L2/L3 cache (whichever is shared between the cores).</p>
+
+<h2 id="padding">Padding</h2>
+
+<p>Great, you discovered false sharing is the bane of your existence and it is causing you major performance issues. I’ve already shown you once solution by using compiler atrributes to ensure data structures are 64 byte aligned, but there is also another common practice I have seen to fix this issue. This next section, padding, is the other common practice to fix false sharing.</p>
+
+<p>I want to put a note here that I recommend using the compiler attribute for aligning memory rather than padding, as they are functionally the same but padding could potentially become unreadable for a future developer.</p>
+
+<p>This becomes explicitly clear when we modify example 1 to using padding rather than alignment:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// rests of the program above...</span>
+<span class="k">typedef</span> <span class="k">struct</span> 
+<span class="p">{</span> 
+  <span class="kt">uint64_t</span> <span class="n">value</span><span class="p">;</span> 
+  <span class="kt">uint32_t</span> <span class="n">id</span><span class="p">;</span> 
+  <span class="kt">char</span> <span class="n">wasted_bytes</span><span class="p">[</span><span class="mi">52</span><span class="p">];</span> <span class="c1">// padding :)</span>
+<span class="p">}</span> <span class="n">Data</span><span class="p">;</span>
+<span class="c1">// rest of the program below...</span>
+</code></pre></div></div>
+
+<p>If we change the <code class="language-plaintext highlighter-rouge">Data</code> structure definition to use padding we get the same performance increase as no false sharing is happening anymore. This is because the 52 byte padding after the first two variables ensures the entire structure is 64 bytes, meaning that two of these structures cannot exist on the same cache line at the same time.</p>
+
+<p>This manual padding works, but it looks fairly gross and comes with some potential issues down the line. First of all we are wasting bytes by adding padding (not that aligning is any better in this aspect). It should be noted that these bytes could be replaced with data in the future. I refer to padding as “I know what I am doing” approach, since you have to manually calculate each individual element and add all the bytes together to know how much padding to add.</p>
+
+<p>This is fine for my simple example, but can you imagine doing this for 10+ structures with a massive amount of elements containing other structures? This calculation starts to be cumbersome and furthermore if any variable is added to this structure in the future the padding has to be recalculated. The math gets annoying fast and your coworkers might yell at you if they have to pull out a calculator everytime they want to add an element to a structure.</p>
+
+<p>The upside of padding? It’s portable. Padding works on literally every C compiler ever made. MSVC, GCC, Clang, etc… nonetheless I still recommend using the compiler attributes for a modern approach.</p>
+
+<figure>
+  <img src="/content/a1/a1_p3.svg" alt="D1 and D2 placed on their own 64-byte cache line, once with explicit padding bytes and once with a compiler alignment attribute" />
+  <figcaption><b>Figure 3:</b> Padding vs Attribute.</figcaption>
+</figure>
+
+<h2 id="cache-invalidation-vs-write-back">Cache Invalidation vs Write-Back</h2>
+
+<p>Let’s get this straight, caches exist to cheat by letting the CPU pretend memory is fast, local, and exclusive. This facade crumbles by a simple touch of the memory by any other peripheral.</p>
+
+<p>The only way to restore reality for this CPU is to use two blunt tools provided by software:</p>
+
+<ul>
+  <li>Write-Back (clean)</li>
+  <li>Invalidation</li>
+</ul>
+
+<p>These are not optimizations bur rather correctness mechanisms and getting them wrong produces bugs that ignore most debuggers and will likely disappear under logging. Only reappearing at the worst possible time. We must understand why these operations exist in the first place, and how they are related to cache.</p>
+
+<h4 id="two-fundamental-cache-issues">Two Fundamental Cache Issues</h4>
+
+<p>All cache bugs or issues are reduced to one of the following:</p>
+
+<p>1) The memory is newer than the cache
+2) The cache is newer than the memory</p>
+
+<p>We first look at the case where the cache is newer than the memory. A write-back forces the dirty cache lines to be written to main memory without them being cleared from the cache. Why is this needed you may ask? Well I am going to answer this from the perspective of a DMA (direct memory access controller).</p>
+
+<p>A DMA allows data to flow from a peripheral directly into memory (or vice versa) while ignoring the CPU. We can think of the flow as going from Disk -&gt; RAM rather than Disk -&gt; CPU -&gt; RAM. We can think of the DMA being “blind” to the CPU’s cache, which creates two major risks that require cleaning and invalidation.</p>
+
+<figure>
+  <img src="/content/a1/a1_p4.svg" alt="A DMA controller moving D1 and D2 between an external peripheral and main memory, outside the CPU's L1 and L2 caches" />
+  <figcaption><b>Figure 4:</b> Generic DMA setup.</figcaption>
+</figure>
+
+<p>Imagine core 0 has a piece of data in its L1 cache. Meanwhile, a DMA controller writes a new version of data directly into the main memory. Core 0 does not know that the memory has changed externally and keeps its old and stale cached version. Therefore to fix this, the system must invalidate that cache line so the CPU is forced to fetch the new data from RAM.</p>
+
+<p>Now if we look at this problem from a different angle, if the CPU has modified data in its cache but has not written it back to RAM yet, then the DMA controller tries to read that data from RAM to send it to a disk or elsewhere but it is reading old data. Therefore the CPU must flush (write-back) its cache to RAM before the DMA starts its job.</p>
+
+<p>You may be wondering, well what the hell when we looked at false sharing those cores had cache coherency that automatically performed the L1 cache hits and automatically updated data for the cores (at a cost of performance of course). So why are we having to do this invalidation and write-back manually now?</p>
+
+<p>To answer this as generically as possible, it comes down to Cache Coherenc*… the gift that keeps giving. Cache coherency does not mean, “memory always updates itself everywhere to the newest version”, a better explanation is:</p>
+
+<blockquote>
+  <p>Cache coherency relies on participants to agree on the value of a cache line when they talk through a coherency fabric</p>
+</blockquote>
+
+<p>Coherency is a protocol controlled by the cache controller; a DMA engine does not have a cache controller therefore it cannot participate in cache coherence and therefore its writes go unnoticed by the CPU caches (hence when software has to be involved). From the definition it should be noted that coherency fabric is the hardware network that lets the cache controllers maintain themselves and other caches.</p>
+
+<p>You must always ensure that your data is not stale if using systems that are not connected directly to your cache controller; flushing (Write-back) and cleaning (invalidation) mechanisms must be used.</p>
+<h2 id="hotcold-data">Hot/Cold Data</h2>
+
+<p>Another interesting topic relating to cache is managing hot and cold data. Just like how your morning coffee is better hot and your Blue Ocean on a sunny day is better cold, different types of data belong in different places based on how often they are used.</p>
+
+<p>Therefore we must develop and understand the relationship between this hot data, cold data, and its relevance to the cache to build systems that are lightning fast.</p>
+
+<p>We define “Hot Data” as the active working set of data that holds information being accessed and modified right now. Ideally, this data must live in the cache or another high performance memory location</p>
+
+<p>We define “Cold Data” as information you rarely visit or look at but the data still must exist. Ideally, this data lives in a slow storage location as it is not needed.</p>
+
+<p>We note that we can have both hot data and cold data in the same structure and hence problems arise regarding the cache. A single hot field or variables can drag its cold neighbors into the cache or a cold field could evict unrelated hot data. Essentially if hot and cold data live in the same cache line, the cache treats them equally even if the software does not.</p>
+
+<p>So what is a common way to ensure the hot and cold data remain separated at the cache level? Well the simplest and highest impact optimization is to perform hot/cold splitting. Now this can look different depending on your scenario. For example, say you are using a complex library with a massive stack that is made up of individual blocks of memory that you can allocate anywhere in your system. You may choose to allocate the “hottest” or most used portions of this stack to the faster regions of memory available to you.</p>
+
+<p>For a much simpler example say we have the following structure:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">typedef</span> <span class="k">struct</span> 
+<span class="p">{</span>
+  <span class="kt">int</span> <span class="n">coffee</span><span class="p">;</span>       <span class="c1">// hot</span>
+  <span class="kt">float</span> <span class="n">fire</span><span class="p">,</span> <span class="n">lava</span><span class="p">;</span> <span class="c1">// hot</span>
+  <span class="kt">char</span> <span class="n">winter</span><span class="p">[</span><span class="mi">32</span><span class="p">];</span>  <span class="c1">// cold</span>
+  <span class="kt">int</span> <span class="n">snow</span><span class="p">;</span>         <span class="c1">// cold</span>
+<span class="p">}</span> <span class="n">object</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p>We know this structure is made up of hot and cold aspects, therefore we can perform a super simple hot/cold splitting of the data:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Fast cache please</span>
+<span class="k">typedef</span> <span class="k">struct</span> 
+<span class="p">{</span>
+  <span class="kt">int</span> <span class="n">coffee</span><span class="p">;</span>       <span class="c1">// hot</span>
+  <span class="kt">float</span> <span class="n">fire</span><span class="p">,</span> <span class="n">lava</span><span class="p">;</span> <span class="c1">// hot</span>
+<span class="p">}</span> <span class="n">hot_object</span><span class="p">;</span>
+
+<span class="c1">// I do not care where I am placed</span>
+<span class="k">typedef</span> <span class="k">struct</span> 
+<span class="p">{</span>
+  <span class="kt">char</span> <span class="n">winter</span><span class="p">[</span><span class="mi">32</span><span class="p">];</span>  <span class="c1">// cold</span>
+  <span class="kt">int</span> <span class="n">snow</span><span class="p">;</span>         <span class="c1">// cold</span>
+<span class="p">}</span> <span class="n">cold_object</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p>For this example, we would want to ensure that the hot data object is placed in the fastest cache possible. This also relates to another topic called “Cold Start” where when a system first starts the cache is empty therefore all requests for hot data result in cache misses, forcing the system to go all the way back to cold data (you can also pre-heat the cache so that it does not have misses on startup).</p>
+
+  </div>
+  <nav class="post-nav">
+    <a class="prev" rel="prev" href="/posts/Making-SciPy-and-CMSIS-DSP-Agree/">&larr; Making SciPy and CMSIS-DSP Agree</a>
+    <a class="next" rel="next" href="/posts/Temporal-and-Spatial-Locality/">Temporal and Spatial Locality &rarr;</a>
+  </nav>
+</article>
+
+  </main>
+</body>
+</html>

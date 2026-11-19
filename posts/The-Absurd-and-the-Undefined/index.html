@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Absurd and the Undefined - Analog Daydreams</title>
+  <meta name="description" content="GCC 12 compiles this function to return 1;:">
+
+  <script>
+    (function () {
+      var theme;
+      try { theme = localStorage.getItem('theme'); } catch (e) {}
+      document.documentElement.dataset.theme = theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,700;1,7..72,400;1,7..72,700&display=swap">
+  <link rel="stylesheet" href="/css/main.css?v=1795129781">
+  <link rel="stylesheet" href="/css/syntax.css?v=1795129781">
+  <link type="application/atom+xml" rel="alternate" href="https://dansop.github.io/feed.xml" title="Analog Daydreams" />
+  <script>
+    MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous"></script>
+
+  <script type="module" src="/js/theme.js?v=1795129781"></script>
+</head>
+<body>
+  <header class="site-header">
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">dark</button>
+    <h1 class="site-title"><a href="/">Analog Daydreams</a></h1>
+    <nav class="site-nav">
+      <a href="/">Home</a>
+      <a href="/about/">About</a>
+      <a href="/golf/">Golf</a>
+    </nav>
+  </header>
+
+  <main>
+    <article class="post">
+  <header class="post-header">
+    <h1 class="post-title">The Absurd and the Undefined</h1>
+    <time class="post-date" datetime="2022-10-21T00:00:00+00:00">October 21, 2022</time>
+  </header>
+
+  <div class="post-content">
+    <p>GCC 12 compiles this function to <code class="language-plaintext highlighter-rouge">return 1;</code>:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">int</span> <span class="nf">will_overflow</span><span class="p">(</span><span class="kt">int</span> <span class="n">x</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="k">return</span> <span class="n">x</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">&gt;</span> <span class="n">x</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mov    eax, 0x1          // return value = 1
+ret
+</code></pre></div></div>
+
+<p>Mathematically <code class="language-plaintext highlighter-rouge">x + 1 &gt; x</code> is always true, but in 32-bit arithmetic it should not be when <code class="language-plaintext highlighter-rouge">x</code> is <code class="language-plaintext highlighter-rouge">INT_MAX</code>, since <code class="language-plaintext highlighter-rouge">x + 1</code> wraps around to <code class="language-plaintext highlighter-rouge">INT_MIN</code>. GCC does this even at <code class="language-plaintext highlighter-rouge">-O0</code>.</p>
+
+<p>The reason is that the C standard lists a long set of things a valid program never does: overflow a signed integer, access an object through a pointer of the wrong type, dereference a null pointer, and so on. If a program does one of them anyway, the standard places <em>no requirements at all</em> on what happens, and compilers read that as permission. A valid program never overflows a signed integer, therefore the compiler is allowed to assume a signed addition never overflows and to optimize on that basis. Every listing here comes from GCC 12 for x86-64 at <code class="language-plaintext highlighter-rouge">-O2</code> (plus <code class="language-plaintext highlighter-rouge">-fcf-protection=none</code>), so any of them can be pasted into Compiler Explorer.</p>
+
+<p>Making <code class="language-plaintext highlighter-rouge">x</code> unsigned, where wrapping is defined, keeps a real comparison, and so does compiling the signed version with <code class="language-plaintext highlighter-rouge">-fwrapv</code>, which tells GCC that signed overflow wraps:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>xor    eax, eax          // result = 0
+cmp    edi, 0x7fffffff   // is x == INT_MAX?
+setne  al                // result = (x != INT_MAX)
+ret
+</code></pre></div></div>
+
+<p>With wrapping defined, GCC works out that <code class="language-plaintext highlighter-rouge">x + 1 &gt; x</code> is false for exactly one input, <code class="language-plaintext highlighter-rouge">INT_MAX</code>, and turns the whole function into <code class="language-plaintext highlighter-rouge">x != INT_MAX</code>. Without the flag, an overflow check written as <code class="language-plaintext highlighter-rouge">if (x + 1 &lt; x)</code> on a signed type is removed from the program without any warning.</p>
+
+<h2 id="strict-aliasing">Strict Aliasing</h2>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">int</span> <span class="nf">alias</span><span class="p">(</span><span class="kt">int</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="kt">float</span> <span class="o">*</span><span class="n">b</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="o">*</span><span class="n">a</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="o">*</span><span class="n">b</span> <span class="o">=</span> <span class="mi">2</span><span class="p">.</span><span class="mi">0</span><span class="n">f</span><span class="p">;</span>
+    <span class="k">return</span> <span class="o">*</span><span class="n">a</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>If <code class="language-plaintext highlighter-rouge">a</code> and <code class="language-plaintext highlighter-rouge">b</code> point at the same memory, the store to <code class="language-plaintext highlighter-rouge">*b</code> overwrites <code class="language-plaintext highlighter-rouge">*a</code>, so the function should return the bits of <code class="language-plaintext highlighter-rouge">2.0f</code>. The aliasing rules say an <code class="language-plaintext highlighter-rouge">int</code> cannot be accessed through a <code class="language-plaintext highlighter-rouge">float*</code>, therefore the compiler assumes the two pointers never overlap:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mov    DWORD PTR [rdi], 0x1          // *a = 1
+mov    eax, 0x1                      // return value = 1, without re-reading *a
+mov    DWORD PTR [rsi], 0x40000000   // *b = 2.0f
+ret
+</code></pre></div></div>
+
+<p>It returns <code class="language-plaintext highlighter-rouge">1</code> straight from a register. With <code class="language-plaintext highlighter-rouge">-fno-strict-aliasing</code>, <code class="language-plaintext highlighter-rouge">*a</code> is read again after the store to <code class="language-plaintext highlighter-rouge">*b</code>:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mov    DWORD PTR [rdi], 0x1
+mov    DWORD PTR [rsi], 0x40000000
+mov    eax, DWORD PTR [rdi]          // re-read *a
+ret
+</code></pre></div></div>
+
+<p>Embedded code runs into this fairly often, for example when reading a byte buffer through a <code class="language-plaintext highlighter-rouge">uint32_t*</code> or reinterpreting a <code class="language-plaintext highlighter-rouge">float</code> as an integer. The safe way to reinterpret bits is <code class="language-plaintext highlighter-rouge">memcpy</code>, which the compiler turns into a register move anyway.</p>
+
+<h2 id="the-deleted-null-check">The Deleted Null Check</h2>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">int</span> <span class="nf">read_reg</span><span class="p">(</span><span class="kt">int</span> <span class="o">*</span><span class="n">p</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="kt">int</span> <span class="n">v</span> <span class="o">=</span> <span class="o">*</span><span class="n">p</span><span class="p">;</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">p</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="k">return</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="k">return</span> <span class="n">v</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Dereferencing a null pointer is undefined, and <code class="language-plaintext highlighter-rouge">*p</code> is read first, therefore the compiler concludes that <code class="language-plaintext highlighter-rouge">p</code> cannot be null by the time of the check, and removes the check as dead code:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mov    eax, DWORD PTR [rdi]   // return *p
+ret
+</code></pre></div></div>
+
+<p>The same pattern caused a Linux kernel vulnerability in 2009, where a null check in the <code class="language-plaintext highlighter-rouge">tun</code> driver was removed for exactly this reason. GCC’s <code class="language-plaintext highlighter-rouge">-fno-delete-null-pointer-checks</code> keeps the check:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>test   rdi, rdi                // is p null?
+mov    eax, 0xffffffff         // result = -1
+cmovne eax, DWORD PTR [rdi]    // if not null, result = *p
+ret
+</code></pre></div></div>
+
+<p>On a desktop the deleted check rarely changes the outcome, since reading address <code class="language-plaintext highlighter-rouge">0x0</code> crashes the program before the check would run anyway. A Cortex-M is different. Address <code class="language-plaintext highlighter-rouge">0x0</code> is valid memory there since the vector table is mapped to it, so reading <code class="language-plaintext highlighter-rouge">*p</code> with <code class="language-plaintext highlighter-rouge">p == 0</code> does not fault and just hands back the initial stack pointer. The check is the only thing that would have caught the bug, therefore I recommend <code class="language-plaintext highlighter-rouge">-fno-delete-null-pointer-checks</code> for every firmware build.</p>
+
+<p>The Linux kernel builds with that flag and <code class="language-plaintext highlighter-rouge">-fno-strict-aliasing</code>, plus <code class="language-plaintext highlighter-rouge">-fno-strict-overflow</code>, which implies <code class="language-plaintext highlighter-rouge">-fwrapv</code> on modern GCC.</p>
+
+  </div>
+  <nav class="post-nav">
+    <a class="prev" rel="prev" href="/posts/Math-Without-an-FPU/">&larr; Math Without an FPU</a>
+    <a class="next" rel="next" href="/posts/Making-SciPy-and-CMSIS-DSP-Agree/">Making SciPy and CMSIS-DSP Agree &rarr;</a>
+  </nav>
+</article>
+
+  </main>
+</body>
+</html>

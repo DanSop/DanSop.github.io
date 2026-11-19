@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analog Daydreams</title>
+  <meta name="description" content="A minimalist blog supporting markdown, LaTeX, code, etc...">
+
+  <script>
+    (function () {
+      var theme;
+      try { theme = localStorage.getItem('theme'); } catch (e) {}
+      document.documentElement.dataset.theme = theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,700;1,7..72,400;1,7..72,700&display=swap">
+  <link rel="stylesheet" href="/css/main.css?v=1795129781">
+  <link rel="stylesheet" href="/css/syntax.css?v=1795129781">
+  <link type="application/atom+xml" rel="alternate" href="https://dansop.github.io/feed.xml" title="Analog Daydreams" />
+  <script>
+    MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous"></script>
+
+  <script type="module" src="/js/theme.js?v=1795129781"></script>
+</head>
+<body>
+  <header class="site-header">
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">dark</button>
+    <h1 class="site-title"><a href="/">Analog Daydreams</a></h1>
+    <nav class="site-nav">
+      <a href="/" aria-current="page">Home</a>
+      <a href="/about/">About</a>
+      <a href="/golf/">Golf</a>
+    </nav>
+  </header>
+
+  <main>
+    <ul class="post-list">
+  <li>
+    <time datetime="2026-11-19T00:00:00+00:00">2026 Nov 19</time>
+    <a href="/posts/Temporal-and-Spatial-Locality/">Temporal and Spatial Locality</a>
+    <p class="post-summary">Every cache is a bet that the future will look like the past. Hume spent a good part of the 1700s pointing out that there is no logical reason it should (the sun rising every morning so far proves nothing about tomorrow), and yet every desktop CPU is built on exactly that bet: whatever you touched a moment ago you will probably touch again, and whatever sits right next to it you will probably want next. Those two assumptions are temporal and spatial locality, and I wanted to know what the bet is actually worth, both when it pays off and when it does not.</p>
+  </li>
+  <li>
+    <time datetime="2025-12-23T00:00:00+00:00">2025 Dec 23</time>
+    <a href="/posts/Playing-with-My-Cache/">Playing with My Cache</a>
+    <p class="post-summary">We will be diving into several memory optimization techniques that I’ve picked up or have seen from working on several projects. The following are the topics that I found interesting and associated with cache/memory optimization and usage. The applications will focus on more resource-constrained systems such as embedded systems, but both examples will likely be provided (if I get around to doing both).</p>
+  </li>
+  <li>
+    <time datetime="2024-04-20T00:00:00+00:00">2024 Apr 20</time>
+    <a href="/posts/Making-SciPy-and-CMSIS-DSP-Agree/">Making SciPy and CMSIS-DSP Agree</a>
+    <p class="post-summary">Designing a filter in Python takes about three lines. Getting a microcontroller to run that same filter in fixed point, and actually produce the same output, is where the afternoon goes. The filter in SciPy is the map (exact coefficients, 64-bit floats, no opinions), and the one running in Q31 on a Cortex-M is the territory. I put together a small project to check one against the other: SciPy designs a six band equalizer, the coefficients get converted to Q31, and the exact same coefficients are run through ARM’s CMSIS-DSP library so the two outputs can be compared side by side.</p>
+  </li>
+  <li>
+    <time datetime="2022-10-21T00:00:00+00:00">2022 Oct 21</time>
+    <a href="/posts/The-Absurd-and-the-Undefined/">The Absurd and the Undefined</a>
+    <p class="post-summary">GCC 12 compiles this function to return 1;:</p>
+  </li>
+  <li>
+    <time datetime="2022-06-10T00:00:00+00:00">2022 Jun 10</time>
+    <a href="/posts/Math-Without-an-FPU/">Math Without an FPU</a>
+    <p class="post-summary">The Cortex-M0 has no floating point unit, therefore every float operation in C turns into a call into a software library. Fixed-point does the same math with plain integer instructions and keeps track of the binary point purely by convention, and I wanted to know how big the difference really is on an STM32F072.</p>
+  </li>
+  <li>
+    <time datetime="2022-02-18T00:00:00+00:00">2022 Feb 18</time>
+    <a href="/posts/What-Happens-Before-main/">What Happens Before main()?</a>
+    <p class="post-summary">The first eight bytes of a Cortex-M firmware image are not code. Here they are from a minimal program I built with arm-none-eabi-gcc 10.3 at -O2 for an STM32F0 with 64 KB of flash and 8 KB of RAM:</p>
+  </li>
+  <li>
+    <time datetime="2021-03-12T00:00:00+00:00">2021 Mar 12</time>
+    <a href="/posts/Why-0x5f3759df/">Why 0x5f3759df?</a>
+    <p class="post-summary">This is the line from the Quake III Arena source code, comment and all:</p>
+  </li>
+  <li>
+    <time datetime="2021-01-28T00:00:00+00:00">2021 Jan 28</time>
+    <a href="/posts/An-Endeavor-About-Gabriels-Horn/">An Endeavor About Gabriel's Horn</a>
+    <p class="post-summary">I first plotted this horn in my notes back in January 2019 (Figure 1 is that exact plot), and the claim attached to it still sounds wrong to me: it holds a finite amount of paint, yet you could never paint the outside of it. Both halves of that only need first-year calculus, so the plan is to do the volume, then the surface area, and then deal with the paint.</p>
+  </li>
+</ul>
+
+  </main>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>About - Analog Daydreams</title>
+  <meta name="description" content="A minimalist blog supporting markdown, LaTeX, code, etc...">
+
+  <script>
+    (function () {
+      var theme;
+      try { theme = localStorage.getItem('theme'); } catch (e) {}
+      document.documentElement.dataset.theme = theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,700;1,7..72,400;1,7..72,700&display=swap">
+  <link rel="stylesheet" href="/css/main.css?v=1795129781">
+  <link rel="stylesheet" href="/css/syntax.css?v=1795129781">
+  <link type="application/atom+xml" rel="alternate" href="https://dansop.github.io/feed.xml" title="Analog Daydreams" />
+
+  <script type="module" src="/js/theme.js?v=1795129781"></script>
+</head>
+<body>
+  <header class="site-header">
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">dark</button>
+    <h1 class="site-title"><a href="/">Analog Daydreams</a></h1>
+    <nav class="site-nav">
+      <a href="/">Home</a>
+      <a href="/about/" aria-current="page">About</a>
+      <a href="/golf/">Golf</a>
+    </nav>
+  </header>
+
+  <main class="about">
+    <h2 id="background">Background</h2>
+
+<p>Electrical engineer by trade, working across hardware, firmware and software, with a strong foundation in math and a focus on applied theory. I started building hardware and software at a young age, long before it became a career.</p>
+
+<p>Outside of engineering, I read a lot of 20th-century science fiction, along with continental philosophy and cybernetic theory, all of which tend to influence the writing style of some articles.</p>
+
+<h2 id="golf">Golf</h2>
+<p>I include my golf scores on this website as well for all eyes to see.</p>
+
+<h2 id="contact">Contact</h2>
+
+<p>Inquiries - dannysoppit@gmail.com <br />
+<a href="https://www.github.com/dansop">GitHub</a> <br />
+<a href="https://www.linkedin.com/in/danny-soppit/">LinkedIn</a></p>
+
+  </main>
+</body>
+</html>

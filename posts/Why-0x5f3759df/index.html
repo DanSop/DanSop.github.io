@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Why 0x5f3759df? - Analog Daydreams</title>
+  <meta name="description" content="This is the line from the Quake III Arena source code, comment and all:">
+
+  <script>
+    (function () {
+      var theme;
+      try { theme = localStorage.getItem('theme'); } catch (e) {}
+      document.documentElement.dataset.theme = theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,700;1,7..72,400;1,7..72,700&display=swap">
+  <link rel="stylesheet" href="/css/main.css?v=1795129781">
+  <link rel="stylesheet" href="/css/syntax.css?v=1795129781">
+  <link type="application/atom+xml" rel="alternate" href="https://dansop.github.io/feed.xml" title="Analog Daydreams" />
+  <script>
+    MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous"></script>
+
+  <script type="module" src="/js/theme.js?v=1795129781"></script>
+</head>
+<body>
+  <header class="site-header">
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">dark</button>
+    <h1 class="site-title"><a href="/">Analog Daydreams</a></h1>
+    <nav class="site-nav">
+      <a href="/">Home</a>
+      <a href="/about/">About</a>
+      <a href="/golf/">Golf</a>
+    </nav>
+  </header>
+
+  <main>
+    <article class="post">
+  <header class="post-header">
+    <h1 class="post-title">Why 0x5f3759df?</h1>
+    <time class="post-date" datetime="2021-03-12T00:00:00+00:00">March 12, 2021</time>
+  </header>
+
+  <div class="post-content">
+    <p>This is the line from the Quake III Arena source code, comment and all:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">i</span>  <span class="o">=</span> <span class="mh">0x5f3759df</span> <span class="o">-</span> <span class="p">(</span> <span class="n">i</span> <span class="o">&gt;&gt;</span> <span class="mi">1</span> <span class="p">);</span>               <span class="c1">// what the fuck?</span>
+</code></pre></div></div>
+
+<p>Given the bits of a float <code class="language-plaintext highlighter-rouge">x</code> in <code class="language-plaintext highlighter-rouge">i</code>, it produces a first guess at \(\frac{1}{\sqrt{x}}\) that is within 3.5% of the right answer, using one shift and one subtraction. In 1999 a square root and a divide were slow enough that a game normalizing vectors every frame cared about that. The constant itself falls out of a logarithm and a bit of algebra, which is what the rest of this post is.</p>
+
+<p>Here it is in modern C. The original casts a <code class="language-plaintext highlighter-rouge">float*</code> to a <code class="language-plaintext highlighter-rouge">long*</code>, which breaks the strict aliasing rules, so <code class="language-plaintext highlighter-rouge">memcpy</code> is used instead:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cp">#include</span> <span class="cpf">&lt;stdint.h&gt;</span><span class="cp">
+#include</span> <span class="cpf">&lt;string.h&gt;</span><span class="cp">
+</span>
+<span class="kt">float</span> <span class="nf">fast_inv_sqrt</span><span class="p">(</span><span class="kt">float</span> <span class="n">x</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="kt">uint32_t</span> <span class="n">i</span><span class="p">;</span>
+    <span class="kt">float</span> <span class="n">y</span><span class="p">;</span>
+
+    <span class="n">memcpy</span><span class="p">(</span><span class="o">&amp;</span><span class="n">i</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">x</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">i</span><span class="p">));</span>          <span class="c1">// read the float's bits as an integer</span>
+    <span class="n">i</span> <span class="o">=</span> <span class="mh">0x5f3759df</span> <span class="o">-</span> <span class="p">(</span><span class="n">i</span> <span class="o">&gt;&gt;</span> <span class="mi">1</span><span class="p">);</span>          <span class="c1">// the magic line</span>
+    <span class="n">memcpy</span><span class="p">(</span><span class="o">&amp;</span><span class="n">y</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">i</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">y</span><span class="p">));</span>          <span class="c1">// back to a float</span>
+
+    <span class="n">y</span> <span class="o">=</span> <span class="n">y</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span><span class="p">.</span><span class="mi">5</span><span class="n">f</span> <span class="o">-</span> <span class="mi">0</span><span class="p">.</span><span class="mi">5</span><span class="n">f</span> <span class="o">*</span> <span class="n">x</span> <span class="o">*</span> <span class="n">y</span> <span class="o">*</span> <span class="n">y</span><span class="p">);</span>  <span class="c1">// one Newton step</span>
+    <span class="k">return</span> <span class="n">y</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="float-bits-as-a-logarithm">Float Bits as a Logarithm</h2>
+
+<p>A 32-bit float is made of a sign bit, an 8-bit exponent \(E\) and a 23-bit mantissa \(M\). For a positive number the value it represents is the following:</p>
+
+\[x = \left(1 + \frac{M}{2^{23}}\right) 2^{E - 127}\]
+
+<p>Taking \(\log_2\) of both sides:</p>
+
+\[\log_2(x) = E - 127 + \log_2\left(1 + \frac{M}{2^{23}}\right)\]
+
+<p>Writing \(m = \frac{M}{2^{23}}\), which is always between \(0\) and \(1\), the curve \(\log_2(1 + m)\) is fairly close to a straight line on that interval. Therefore we can approximate it with \(m + \sigma\), where \(\sigma\) is a small correction term (Figure 1):</p>
+
+<figure>
+  <img src="/content/a2/log-approx.svg" alt="Plot of log2(1 + m) against the straight line m + σ with σ = 0.0450, and the line m, for m from 0 to 1" />
+  <figcaption><b>Figure 1:</b> The straight line approximation. <small>(updated 2026)</small></figcaption>
+</figure>
+
+<p>Plugging that approximation back in gives the following:</p>
+
+\[\begin{aligned}
+\log_2(x) &amp;\approx \frac{M}{2^{23}} + \sigma + E - 127 \\
+&amp;= \frac{1}{2^{23}}\left(E \cdot 2^{23} + M\right) + \sigma - 127
+\end{aligned}\]
+
+<p>where \(E \cdot 2^{23} + M\) is the integer you get when you read the float’s bits as an integer. Calling that integer \(I_x\):</p>
+
+\[\boxed{\log_2(x) \approx \frac{I_x}{2^{23}} + \sigma - 127}\]
+
+<p>So the bits of a float, read as an integer, are roughly a scaled and shifted copy of its own logarithm (which I still find a little absurd), and everything after this is algebra.</p>
+
+<h2 id="deriving-the-constant">Deriving the Constant</h2>
+
+<p>We want \(y = \frac{1}{\sqrt{x}}\), so taking \(\log_2\) of that gives:</p>
+
+\[\log_2(y) = -\frac{1}{2}\log_2(x)\]
+
+<p>Replacing both logarithms with the integer approximation from above:</p>
+
+\[\frac{I_y}{2^{23}} + \sigma - 127 = -\frac{1}{2}\left(\frac{I_x}{2^{23}} + \sigma - 127\right)\]
+
+<p>Solving for \(I_y\):</p>
+
+\[\begin{aligned}
+\frac{I_y}{2^{23}} &amp;= -\frac{1}{2}\frac{I_x}{2^{23}} + \frac{3}{2}(127 - \sigma) \\
+I_y &amp;= \frac{3}{2} \cdot 2^{23} (127 - \sigma) - \frac{I_x}{2}
+\end{aligned}\]
+
+<p>The \(\frac{I_x}{2}\) term is <code class="language-plaintext highlighter-rouge">i &gt;&gt; 1</code> and the first term is a constant, so plugging in \(\sigma \approx 0.0450466\) gives the following:</p>
+
+\[\frac{3}{2} \cdot 2^{23} (127 - 0.0450466) = 1597463007 = \boxed{\texttt{0x5f3759df}}\]
+
+<p>The \(\sigma\) that best fits the straight line by itself is closer to \(0.0430\), so whoever picked <code class="language-plaintext highlighter-rouge">0x5f3759df</code> most likely tuned it for the result after the Newton step rather than for the line.</p>
+
+<p>As an example take \(x = 10\). Its bits read as an integer are <code class="language-plaintext highlighter-rouge">0x41200000</code>, and shifting right by one gives <code class="language-plaintext highlighter-rouge">0x20900000</code>. Subtracting that from the constant gives <code class="language-plaintext highlighter-rouge">0x3ea759df</code>, which read back as a float is \(0.3269\). The true value of \(\frac{1}{\sqrt{10}}\) is \(0.3162\), therefore the first guess is off by about 3.4%.</p>
+
+<h2 id="one-newton-step">One Newton Step</h2>
+
+<p>To refine the guess we use one step of Newton’s method, and we want the root of the following:</p>
+
+\[f(y) = \frac{1}{y^2} - x\]
+
+<p>since \(f(y) = 0\) exactly when \(y = \frac{1}{\sqrt{x}}\). With \(f'(y) = -\frac{2}{y^3}\), one Newton step becomes:</p>
+
+\[\begin{aligned}
+y_{n+1} &amp;= y_n - \frac{f(y_n)}{f'(y_n)} \\
+&amp;= y_n - \frac{\frac{1}{y_n^2} - x}{-\frac{2}{y_n^3}} \\
+&amp;= y_n\left(\frac{3}{2} - \frac{x}{2}y_n^2\right)
+\end{aligned}\]
+
+<p>This is the last line of the function, and it only needs multiplications, no division and no square root. For \(x = 10\) the guess of \(0.3269\) becomes \(0.3157\), which is within 0.17% of the true value.</p>
+
+<figure>
+  <img src="/content/a2/newton-error.svg" alt="Relative error for inputs 0.1 to 10: up to about 3.4% with the magic number alone and under 0.18% after one Newton step" />
+  <figcaption><b>Figure 2:</b> Error before and after the Newton step. <small>(updated 2026)</small></figcaption>
+</figure>
+
+<p>The error pattern repeats every factor of 4, since the square root halves the exponent. Over all inputs the worst case error is 3.44% from the magic number alone, 0.175% after one Newton step and 0.0005% after two.</p>
+
+<p>Modern x86 CPUs have <code class="language-plaintext highlighter-rouge">rsqrtss</code>, which makes the first guess in hardware to about 12 bits, and the same Newton step still gets bolted on after it when more precision is needed.</p>
+
+  </div>
+  <nav class="post-nav">
+    <a class="prev" rel="prev" href="/posts/An-Endeavor-About-Gabriels-Horn/">&larr; An Endeavor About Gabriel's Horn</a>
+    <a class="next" rel="next" href="/posts/What-Happens-Before-main/">What Happens Before main()? &rarr;</a>
+  </nav>
+</article>
+
+  </main>
+</body>
+</html>

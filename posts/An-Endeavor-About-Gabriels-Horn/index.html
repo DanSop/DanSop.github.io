@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>An Endeavor About Gabriel's Horn - Analog Daydreams</title>
+  <meta name="description" content="I first plotted this horn in my notes back in January 2019 (Figure 1 is that exact plot), and the claim attached to it still sounds wrong to me: it holds a f...">
+
+  <script>
+    (function () {
+      var theme;
+      try { theme = localStorage.getItem('theme'); } catch (e) {}
+      document.documentElement.dataset.theme = theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,700;1,7..72,400;1,7..72,700&display=swap">
+  <link rel="stylesheet" href="/css/main.css?v=1795129781">
+  <link rel="stylesheet" href="/css/syntax.css?v=1795129781">
+  <link type="application/atom+xml" rel="alternate" href="https://dansop.github.io/feed.xml" title="Analog Daydreams" />
+  <script>
+    MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous"></script>
+
+  <script type="module" src="/js/theme.js?v=1795129781"></script>
+</head>
+<body>
+  <header class="site-header">
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">dark</button>
+    <h1 class="site-title"><a href="/">Analog Daydreams</a></h1>
+    <nav class="site-nav">
+      <a href="/">Home</a>
+      <a href="/about/">About</a>
+      <a href="/golf/">Golf</a>
+    </nav>
+  </header>
+
+  <main>
+    <article class="post">
+  <header class="post-header">
+    <h1 class="post-title">An Endeavor About Gabriel's Horn</h1>
+    <time class="post-date" datetime="2021-01-28T00:00:00+00:00">January 28, 2021</time>
+  </header>
+
+  <div class="post-content">
+    <p>I first plotted this horn in my notes back in January 2019 (Figure 1 is that exact plot), and the claim attached to it still sounds wrong to me: it holds a finite amount of paint, yet you could never paint the outside of it. Both halves of that only need first-year calculus, so the plan is to do the volume, then the surface area, and then deal with the paint.</p>
+
+<h2 id="the-horn">The Horn</h2>
+
+<p>Firstly we need the horn itself, so take the curve \(y = \frac{1}{x}\), only keep the part where \(x \geq 1\) and spin it around the x-axis. What comes out is a long trumpet that keeps getting thinner but never actually closes off, since \(\frac{1}{x}\) never reaches zero.</p>
+
+<figure>
+  <img class="invert-dark" src="/content/a0/horn-2019.png" alt="Gabriel's Horn drawn in 3D and from the side, the surface of y = 1/x rotated about the x-axis from x = 1 to 16" />
+  <figcaption><b>Figure 1:</b> Gabriel's Horn from x = 1 to 16.</figcaption>
+</figure>
+
+<h2 id="volume">Volume</h2>
+
+<p>The horn is infinitely long, so we cannot integrate all the way out right away. Instead I will chop it off at some arbitrary \(x = a\), do the math, and then let \(a\) run off to infinity at the very end.</p>
+
+<p>Using the disk method, every slice of the horn is a circle with a radius of \(\frac{1}{x}\), therefore each slice has an area of \(\pi\left(\frac{1}{x}\right)^2\) and adding up all of those slices from \(1\) to \(a\) gives the following:</p>
+
+\[\begin{aligned}
+V(a) &amp;= \pi \int_1^a \left(\frac{1}{x}\right)^2 dx \\
+&amp;= \pi \left[-\frac{1}{x}\right]_1^a \\
+&amp;= \pi\left(1 - \frac{1}{a}\right)
+\end{aligned}\]
+
+<p>Now letting the horn go on forever \(\dots\)</p>
+
+\[\boxed{\lim_{a\to\infty} V(a) = \pi}\]
+
+<p>\(\dots\) the volume converges to \(\pi\) cubic units. An infinitely long horn that holds about 3.14 units of paint.</p>
+
+<h2 id="surface-area">Surface Area</h2>
+
+<p>The surface area of a solid of revolution is given by the following:</p>
+
+\[A = 2\pi \int_1^a f(x)\sqrt{1 + \big(f'(x)\big)^2}\, dx\]
+
+<p>With \(f(x) = \frac{1}{x}\) and \(f'(x) = -\frac{1}{x^2}\) we get:</p>
+
+\[A(a) = 2\pi \int_1^a \frac{1}{x}\sqrt{1 + \frac{1}{x^4}}\, dx\]
+
+<p>This integral is not very pleasant to solve directly, but I do not need its exact value since a lower bound is enough to make the point. The square root \(\sqrt{1 + \frac{1}{x^4}}\) is bigger than one for every \(x\), so the integrand is always bigger than \(\frac{1}{x}\). Therefore:</p>
+
+\[\begin{aligned}
+A(a) &amp;&gt; 2\pi \int_1^a \frac{1}{x}\, dx \\
+&amp;= 2\pi \ln(a)
+\end{aligned}\]
+
+<p>And since \(\ln(a)\) grows without any bound \(\dots\)</p>
+
+\[\boxed{\lim_{a\to\infty} A(a) = \infty}\]
+
+<p>\(\dots\) the surface area is infinite, even though it grows very slowly.</p>
+
+<h2 id="volume-vs-surface-area">Volume vs. Surface Area</h2>
+
+<p>Figure 2 plots both against the length of the horn. The volume levels off at \(\pi\) after only a few units of length while the surface area keeps on climbing, and on a log axis the area is close to a straight line, which is exactly the \(\ln(a)\) from the bound above.</p>
+
+<figure>
+  <img src="/content/a0/volume-area.svg" alt="Log-scale plot of horn length against surface area, which keeps growing just above its 2π ln(a) lower bound, and volume, which levels off at π" />
+  <figcaption><b>Figure 2:</b> Volume vs. surface area. <small>(updated 2026)</small></figcaption>
+</figure>
+
+<p>Going from a length of 1,000 to 1,000,000 does not change the volume to two decimal places (3.14 both times), while the surface area almost doubles, from 44.1 to 87.5.</p>
+
+<h2 id="so-where-does-the-paint-go">So Where Does the Paint Go?</h2>
+
+<p>Essentially what this means is that one could easily fill the horn with paint, \(\pi\) units of it to be exact, but it would take an infinite amount of paint to cover the outside. Filling the horn also coats the inside walls though, which have the exact same infinite area, therefore the two results seem to contradict each other.</p>
+
+<p>The way out is that real paint has a thickness. Far enough down the horn the opening gets narrower than a single molecule of paint, so the paint simply cannot follow it all the way down. The mathematical horn has walls with zero thickness, and a layer of paint that keeps getting thinner can cover an infinite area with a finite volume.</p>
+
+  </div>
+  <nav class="post-nav">
+    <a class="next" rel="next" href="/posts/Why-0x5f3759df/">Why 0x5f3759df? &rarr;</a>
+  </nav>
+</article>
+
+  </main>
+</body>
+</html>

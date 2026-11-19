@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>What Happens Before main()? - Analog Daydreams</title>
+  <meta name="description" content="The first eight bytes of a Cortex-M firmware image are not code. Here they are from a minimal program I built with arm-none-eabi-gcc 10.3 at -O2 for an STM32...">
+
+  <script>
+    (function () {
+      var theme;
+      try { theme = localStorage.getItem('theme'); } catch (e) {}
+      document.documentElement.dataset.theme = theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,700;1,7..72,400;1,7..72,700&display=swap">
+  <link rel="stylesheet" href="/css/main.css?v=1795129781">
+  <link rel="stylesheet" href="/css/syntax.css?v=1795129781">
+  <link type="application/atom+xml" rel="alternate" href="https://dansop.github.io/feed.xml" title="Analog Daydreams" />
+  <script>
+    MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous"></script>
+
+  <script type="module" src="/js/theme.js?v=1795129781"></script>
+</head>
+<body>
+  <header class="site-header">
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">dark</button>
+    <h1 class="site-title"><a href="/">Analog Daydreams</a></h1>
+    <nav class="site-nav">
+      <a href="/">Home</a>
+      <a href="/about/">About</a>
+      <a href="/golf/">Golf</a>
+    </nav>
+  </header>
+
+  <main>
+    <article class="post">
+  <header class="post-header">
+    <h1 class="post-title">What Happens Before main()?</h1>
+    <time class="post-date" datetime="2022-02-18T00:00:00+00:00">February 18, 2022</time>
+  </header>
+
+  <div class="post-content">
+    <p>The first eight bytes of a Cortex-M firmware image are not code. Here they are from a minimal program I built with <code class="language-plaintext highlighter-rouge">arm-none-eabi-gcc</code> 10.3 at <code class="language-plaintext highlighter-rouge">-O2</code> for an STM32F0 with 64 KB of flash and 8 KB of RAM:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>08000000: 00200020 15000008
+</code></pre></div></div>
+
+<p>The bytes look scrambled because the Cortex-M is little-endian, meaning the least significant byte of a number is stored first. Reading each group of four bytes backwards gives the actual values, <code class="language-plaintext highlighter-rouge">0x20002000</code> and <code class="language-plaintext highlighter-rouge">0x08000015</code>. On an STM32F0 flash starts at <code class="language-plaintext highlighter-rouge">0x08000000</code> and RAM at <code class="language-plaintext highlighter-rouge">0x20000000</code>, so the first value is the very top of the 8 KB of RAM (<code class="language-plaintext highlighter-rouge">0x20000000 + 0x2000</code>), and the second points into flash. Between them, those two words are most of the answer to what happens before <code class="language-plaintext highlighter-rouge">main()</code>.</p>
+
+<h2 id="reset-and-the-vector-table">Reset and the Vector Table</h2>
+
+<p>When a Cortex-M comes out of reset, the hardware reads the first word of flash into the stack pointer, reads the second word into the program counter, and only then runs its first instruction, at whatever address the program counter now holds. Those first words are the start of the vector table, a list of addresses that also holds the handlers for every interrupt and fault. The STM32 maps the start of flash to address <code class="language-plaintext highlighter-rouge">0x0</code> when it boots from flash, so the table physically lives at <code class="language-plaintext highlighter-rouge">0x08000000</code>.</p>
+
+<p>The second value is the reset handler’s address, except that <code class="language-plaintext highlighter-rouge">Reset_Handler</code> is really at <code class="language-plaintext highlighter-rouge">0x08000014</code>. That extra 1 in the lowest bit tells the CPU to run the code as Thumb instructions, the compact instruction set that a Cortex-M uses. Every handler address in the table has this bit set, and if it were 0 the CPU would fault on its very first instruction.</p>
+
+<figure>
+  <img src="/content/a3/reset-vector.svg" alt="Vector table at the start of flash, whose first two entries the core loads into SP (0x2000 2000) and PC (0x0800 0014) at reset" />
+  <figcaption><b>Figure 1:</b> What the CPU reads from the vector table at reset. <small>(updated 2026)</small></figcaption>
+</figure>
+
+<p>The stack pointer being loaded first matters more than it looks. Every C function uses the stack for its locals and return addresses, therefore on a lot of other processors the first few instructions after reset have to be written in assembly just to point the stack somewhere sane (on Linux the kernel hands every new process a stack before its first instruction runs). On a Cortex-M the hardware has already done it, so the reset handler can be an ordinary C function. In C the table is just an array of pointers:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">__attribute__</span><span class="p">((</span><span class="n">section</span><span class="p">(</span><span class="s">".isr_vector"</span><span class="p">),</span> <span class="n">used</span><span class="p">))</span>
+<span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">vector_table</span><span class="p">[]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="o">&amp;</span><span class="n">_estack</span><span class="p">,</span>
+    <span class="n">Reset_Handler</span><span class="p">,</span>
+    <span class="n">NMI_Handler</span><span class="p">,</span>
+    <span class="n">HardFault_Handler</span><span class="p">,</span>
+<span class="p">};</span>
+</code></pre></div></div>
+
+<p>The <code class="language-plaintext highlighter-rouge">section(".isr_vector")</code> attribute tells the compiler to put the array in its own section so the linker can place it first in flash, and <code class="language-plaintext highlighter-rouge">used</code> stops the compiler from removing it, since no C code ever reads it. <code class="language-plaintext highlighter-rouge">_estack</code> is the address of the top of RAM, which comes from the linker script further down.</p>
+
+<h2 id="where-variables-live">Where Variables Live</h2>
+
+<p>Here is the program I will be starting:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">uint32_t</span> <span class="n">boot_count</span> <span class="o">=</span> <span class="mi">42</span><span class="p">;</span>
+<span class="kt">uint32_t</span> <span class="n">ticks</span><span class="p">;</span>
+
+<span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="n">boot_count</span><span class="o">++</span><span class="p">;</span>
+    <span class="p">...</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>When the compiler builds this, it sorts everything into the following sections:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">.text</code> holds the machine code for functions.</li>
+  <li><code class="language-plaintext highlighter-rouge">.rodata</code> holds constants and string literals that never change.</li>
+  <li><code class="language-plaintext highlighter-rouge">.data</code> holds global and <code class="language-plaintext highlighter-rouge">static</code> variables that have a non-zero starting value, like <code class="language-plaintext highlighter-rouge">boot_count</code>.</li>
+  <li><code class="language-plaintext highlighter-rouge">.bss</code> holds global and <code class="language-plaintext highlighter-rouge">static</code> variables that start at zero or have no initializer, like <code class="language-plaintext highlighter-rouge">ticks</code>.</li>
+</ul>
+
+<p><code class="language-plaintext highlighter-rouge">.text</code> and <code class="language-plaintext highlighter-rouge">.rodata</code> can stay in flash since they never change. <code class="language-plaintext highlighter-rouge">.data</code> and <code class="language-plaintext highlighter-rouge">.bss</code> are the problem. <code class="language-plaintext highlighter-rouge">boot_count</code> changes while the program runs so it has to be in RAM, but RAM is random at power-on, therefore the <code class="language-plaintext highlighter-rouge">42</code> has to be stored in flash and copied into RAM before <code class="language-plaintext highlighter-rouge">main()</code> runs. The C standard also says <code class="language-plaintext highlighter-rouge">ticks</code> starts at zero, so that part of RAM has to be cleared before <code class="language-plaintext highlighter-rouge">main()</code> as well. Those two jobs are most of what the startup code is for.</p>
+
+<h2 id="the-linker-script">The Linker Script</h2>
+
+<p>The compiler turns each <code class="language-plaintext highlighter-rouge">.c</code> file into an object file containing these sections, but without final addresses. The linker then combines them into one program and decides where every section goes, and for a microcontroller it needs a linker script describing the chip’s memory:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>MEMORY
+{
+    FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 64K
+    RAM   (rwx) : ORIGIN = 0x20000000, LENGTH = 8K
+}
+
+_estack = ORIGIN(RAM) + LENGTH(RAM);
+
+SECTIONS
+{
+    .isr_vector : { KEEP(*(.isr_vector)) } &gt; FLASH
+    .text       : { *(.text*) *(.rodata*) } &gt; FLASH
+
+    _sidata = LOADADDR(.data);
+    .data : { _sdata = .; *(.data*); _edata = .; } &gt; RAM AT &gt; FLASH
+
+    .bss  : { _sbss = .; *(.bss*) *(COMMON); _ebss = .; } &gt; RAM
+}
+</code></pre></div></div>
+
+<p>The <code class="language-plaintext highlighter-rouge">MEMORY</code> block lists where flash and RAM are and how big they are. In <code class="language-plaintext highlighter-rouge">SECTIONS</code>, <code class="language-plaintext highlighter-rouge">&gt; FLASH</code> and <code class="language-plaintext highlighter-rouge">&gt; RAM</code> say which memory each section goes into, and the vector table is listed first so it ends up at the very start of flash.</p>
+
+<p>On the <code class="language-plaintext highlighter-rouge">.data</code> line, <code class="language-plaintext highlighter-rouge">&gt; RAM AT &gt; FLASH</code> gives <code class="language-plaintext highlighter-rouge">.data</code> two addresses: the address it runs from in RAM, and the address where its initial values are stored in flash. The <code class="language-plaintext highlighter-rouge">.</code> in the script means the current address, so <code class="language-plaintext highlighter-rouge">_sdata = .;</code> and <code class="language-plaintext highlighter-rouge">_edata = .;</code> record where <code class="language-plaintext highlighter-rouge">.data</code> starts and ends in RAM, and <code class="language-plaintext highlighter-rouge">LOADADDR(.data)</code> gives the address of its copy in flash. <code class="language-plaintext highlighter-rouge">_sbss</code> and <code class="language-plaintext highlighter-rouge">_ebss</code> do the same for <code class="language-plaintext highlighter-rouge">.bss</code>.</p>
+
+<p>These names are linker symbols, not variables. A linker symbol is just an address, therefore in C they are declared as <code class="language-plaintext highlighter-rouge">extern</code> and only ever used with <code class="language-plaintext highlighter-rouge">&amp;</code>:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">extern</span> <span class="kt">uint32_t</span> <span class="n">_sidata</span><span class="p">,</span> <span class="n">_sdata</span><span class="p">,</span> <span class="n">_edata</span><span class="p">,</span> <span class="n">_sbss</span><span class="p">,</span> <span class="n">_ebss</span><span class="p">,</span> <span class="n">_estack</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p>Here <code class="language-plaintext highlighter-rouge">&amp;_sdata</code> is the address where <code class="language-plaintext highlighter-rouge">.data</code> starts. Reading <code class="language-plaintext highlighter-rouge">_sdata</code> itself reads whatever happens to be stored at that address, which is the classic first mistake with these.</p>
+
+<p>The symbol table of the built program shows where everything landed:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Symbol</th>
+      <th>Address</th>
+      <th>Meaning</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">_sidata</code></td>
+      <td><code class="language-plaintext highlighter-rouge">0x08000078</code></td>
+      <td>where the initial values of <code class="language-plaintext highlighter-rouge">.data</code> are stored in flash</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">_sdata</code> / <code class="language-plaintext highlighter-rouge">boot_count</code></td>
+      <td><code class="language-plaintext highlighter-rouge">0x20000000</code></td>
+      <td>start of <code class="language-plaintext highlighter-rouge">.data</code> in RAM</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">_edata</code> / <code class="language-plaintext highlighter-rouge">_sbss</code></td>
+      <td><code class="language-plaintext highlighter-rouge">0x20000004</code></td>
+      <td>end of <code class="language-plaintext highlighter-rouge">.data</code>, start of <code class="language-plaintext highlighter-rouge">.bss</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">ticks</code></td>
+      <td><code class="language-plaintext highlighter-rouge">0x20000004</code></td>
+      <td>the zero-initialized variable</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">_ebss</code></td>
+      <td><code class="language-plaintext highlighter-rouge">0x20000008</code></td>
+      <td>end of <code class="language-plaintext highlighter-rouge">.bss</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">_estack</code></td>
+      <td><code class="language-plaintext highlighter-rouge">0x20002000</code></td>
+      <td>top of RAM, the initial stack pointer</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>The value <code class="language-plaintext highlighter-rouge">42</code> for <code class="language-plaintext highlighter-rouge">boot_count</code> is stored in flash at <code class="language-plaintext highlighter-rouge">0x08000078</code>, and the variable itself lives in RAM at <code class="language-plaintext highlighter-rouge">0x20000000</code>.</p>
+
+<figure>
+  <img src="/content/a3/memory-map.svg" alt="Memory map with flash holding .isr_vector, .text, .rodata and the load copy of .data, and SRAM holding .data, .bss and the stack, with .data copied from flash at reset" />
+  <figcaption><b>Figure 2:</b> The memory map and the two jobs of the startup code. <small>(updated 2026)</small></figcaption>
+</figure>
+
+<h2 id="the-reset-handler">The Reset Handler</h2>
+
+<p>With those symbols the reset handler is a short C function:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">void</span> <span class="nf">Reset_Handler</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">src</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">_sidata</span><span class="p">;</span>
+    <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">dst</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">_sdata</span><span class="p">;</span>
+
+    <span class="k">while</span> <span class="p">(</span><span class="n">dst</span> <span class="o">&lt;</span> <span class="o">&amp;</span><span class="n">_edata</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="o">*</span><span class="n">dst</span><span class="o">++</span> <span class="o">=</span> <span class="o">*</span><span class="n">src</span><span class="o">++</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="n">dst</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">_sbss</span><span class="p">;</span>
+    <span class="k">while</span> <span class="p">(</span><span class="n">dst</span> <span class="o">&lt;</span> <span class="o">&amp;</span><span class="n">_ebss</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="o">*</span><span class="n">dst</span><span class="o">++</span> <span class="o">=</span> <span class="mi">0U</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="n">main</span><span class="p">();</span>
+
+    <span class="k">while</span> <span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="p">{</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Firstly, the first loop copies <code class="language-plaintext highlighter-rouge">.data</code> one 32-bit word at a time, reading from flash through <code class="language-plaintext highlighter-rouge">src</code> and writing to RAM through <code class="language-plaintext highlighter-rouge">dst</code>, until <code class="language-plaintext highlighter-rouge">dst</code> reaches the end of <code class="language-plaintext highlighter-rouge">.data</code>. Secondly, the second loop writes zero to every word from the start to the end of <code class="language-plaintext highlighter-rouge">.bss</code>. Copying a word at a time is safe because vendor linker scripts pad each section to a multiple of 4 bytes with <code class="language-plaintext highlighter-rouge">ALIGN(4)</code>. The infinite loop after <code class="language-plaintext highlighter-rouge">main()</code> is there because there is nothing to return to, therefore it is the only sane place to park the CPU.</p>
+
+<p>The compiler turns this into two small loops of instructions:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>800002c:  ldr    r4, [r0, r3]     ; load a word from flash into r4
+800002e:  str    r4, [r1, r3]     ; store r4 into RAM
+8000030:  adds   r3, #4           ; move to the next word
+8000032:  cmp    r3, r2           ; reached the end of .data?
+8000034:  bne.n  800002c          ; if not, go back
+   ...
+800004c:  stmia  r3!, {r1}        ; store r1 (zero) and advance r3
+800004e:  cmp    r3, r2           ; reached the end of .bss?
+8000050:  bne.n  800004c          ; if not, go back
+8000052:  bl     800006c &lt;main&gt;   ; call main, return address saved in LR
+</code></pre></div></div>
+
+<p>The numbers on the left are the addresses of each instruction in flash, which is what the program counter steps through. <code class="language-plaintext highlighter-rouge">stmia</code> stores a register and moves the pointer forward in one instruction, and <code class="language-plaintext highlighter-rouge">bl</code> is the call into <code class="language-plaintext highlighter-rouge">main</code>, which saves the return address in the link register and loads the address of <code class="language-plaintext highlighter-rouge">main</code> into the program counter.</p>
+
+<p>A real project uses the vendor’s startup file instead of writing its own, and it does the same two loops plus a little more before calling <code class="language-plaintext highlighter-rouge">main()</code>: it calls <code class="language-plaintext highlighter-rouge">SystemInit()</code> to set up the clocks, since the chip comes out of reset on a slow internal oscillator, switches the FPU on for parts that have one (until then the first floating point instruction faults), and calls <code class="language-plaintext highlighter-rouge">__libc_init_array()</code> to run C++ constructors and anything marked <code class="language-plaintext highlighter-rouge">__attribute__((constructor))</code>.</p>
+
+  </div>
+  <nav class="post-nav">
+    <a class="prev" rel="prev" href="/posts/Why-0x5f3759df/">&larr; Why 0x5f3759df?</a>
+    <a class="next" rel="next" href="/posts/Math-Without-an-FPU/">Math Without an FPU &rarr;</a>
+  </nav>
+</article>
+
+  </main>
+</body>
+</html>

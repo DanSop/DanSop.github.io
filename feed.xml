@@ -1,0 +1,1003 @@
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="3.10.0">Jekyll</generator><link href="https://dansop.github.io/feed.xml" rel="self" type="application/atom+xml" /><link href="https://dansop.github.io/" rel="alternate" type="text/html" /><updated>2026-11-19T23:09:41+00:00</updated><id>https://dansop.github.io/feed.xml</id><title type="html">Analog Daydreams</title><subtitle>A minimalist blog supporting markdown, LaTeX, code, etc...</subtitle><entry><title type="html">Temporal and Spatial Locality</title><link href="https://dansop.github.io/posts/Temporal-and-Spatial-Locality/" rel="alternate" type="text/html" title="Temporal and Spatial Locality" /><published>2026-11-19T00:00:00+00:00</published><updated>2026-11-19T00:00:00+00:00</updated><id>https://dansop.github.io/posts/Temporal-and-Spatial-Locality</id><content type="html" xml:base="https://dansop.github.io/posts/Temporal-and-Spatial-Locality/"><![CDATA[<p>Every cache is a bet that the future will look like the past. Hume spent a good part of the 1700s pointing out that there is no logical reason it should (the sun rising every morning so far proves nothing about tomorrow), and yet every desktop CPU is built on exactly that bet: whatever you touched a moment ago you will probably touch again, and whatever sits right next to it you will probably want next. Those two assumptions are temporal and spatial locality, and I wanted to know what the bet is actually worth, both when it pays off and when it does not.</p>
+
+<p>So I wrote a few small benchmarks and ran them on my laptop, an AMD Ryzen 9 8945HS with 32 KB of L1 data cache and 1 MB of L2 per core and 16 MB of L3 shared between them. Everything was built with GCC 16.2 at <code class="language-plaintext highlighter-rouge">-O2</code>, run under WSL2 pinned to a single core, and every number below is the median of five runs.</p>
+
+<h2 id="temporal-locality">Temporal Locality</h2>
+
+<p>To see what the cache is worth, the benchmark first has to make it impossible to guess anything. I built a buffer of 64-byte nodes, one per cache line, linked every node into a single random cycle, and then just followed the pointers:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// One node per cache line, so every hop lands on a new line</span>
+<span class="k">typedef</span> <span class="k">struct</span> <span class="n">chase_node</span>
+<span class="p">{</span>
+    <span class="k">struct</span> <span class="n">chase_node</span> <span class="o">*</span><span class="n">next</span><span class="p">;</span>
+    <span class="kt">uint8_t</span> <span class="n">padding</span><span class="p">[</span><span class="n">CACHE_LINE_SIZE</span> <span class="o">-</span> <span class="k">sizeof</span><span class="p">(</span><span class="k">struct</span> <span class="n">chase_node</span> <span class="o">*</span><span class="p">)];</span>
+<span class="p">}</span> <span class="n">chase_node_t</span><span class="p">;</span>
+
+<span class="n">chase_node_t</span> <span class="o">*</span><span class="n">node</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">nodes</span><span class="p">[</span><span class="n">order</span><span class="p">[</span><span class="mi">0</span><span class="p">]];</span>
+
+<span class="k">for</span> <span class="p">(</span><span class="kt">uint32_t</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0U</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">NUM_CHASE_LOADS</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="n">node</span> <span class="o">=</span> <span class="n">node</span><span class="o">-&gt;</span><span class="n">next</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Every load needs the address that the previous load returns, so nothing can start early, and the random order leaves no pattern to learn. What is left is the raw latency of wherever the buffer happens to fit, and growing the buffer walks it down the memory hierarchy (Figure 1, “Random order”).</p>
+
+<figure>
+  <img src="/content/a5/working-set.svg" alt="Log-log plot of time per cache line against working set size from 4 KB to 512 MB. Random order steps up from 0.8 ns in L1 to about 3 ns in L2, 10 to 15 ns in L3 and about 125 ns in DRAM; front to back stays between 0.8 and 1.5 ns throughout" />
+  <figcaption><b>Figure 1:</b> Time per cache line against working set size.</figcaption>
+</figure>
+
+<p>While the whole cycle fits in the 32 KB of L1, a load takes 0.8 ns, about four clock cycles. Past that it steps up to 2.8 ns in L2, somewhere between 10 and 15 ns in L3, and once the buffer outgrows the 16 MB of L3 it climbs to 126 ns at 512 MB, which is DRAM plus a page table lookup on nearly every load. The steps do not land exactly on the cache sizes (the buffer is not the only thing living in the cache, and Windows is still running underneath WSL), and right at each boundary the numbers moved by up to a third between runs. Away from the boundaries they repeated within a few percent. Same loop, same number of instructions, and a factor of 160 between the two ends.</p>
+
+<h2 id="spatial-locality">Spatial Locality</h2>
+
+<p>Spatial locality is the other half of the bet. Memory moves between the levels a whole 64-byte line at a time, so reading one byte drags its 63 neighbours along for free, and the only way to see what that is worth is to stop using the neighbours. Figure 2 reads one byte every <code class="language-plaintext highlighter-rouge">stride</code> bytes across a 1 GB buffer, far bigger than L3.</p>
+
+<figure>
+  <img src="/content/a5/stride.svg" alt="Plot of time per access against stride from 8 bytes to 16 KB. Time rises from 0.4 ns at 8 bytes to 2.3 ns at 64 bytes, creeps up to about 6.7 ns by 2 KB and jumps to about 10.5 ns at 4 KB and beyond" />
+  <figcaption><b>Figure 2:</b> Time per access against stride.</figcaption>
+</figure>
+
+<p>Up to 64 bytes the time per access roughly doubles every time the stride doubles, from 0.4 ns at an 8-byte stride to 2.3 ns at 64. That is just one line being shared between fewer and fewer accesses, until every access gets a line to itself. Past that it creeps up to about 6.7 ns, and at 4 KB it jumps to 10.5 ns and stays there. 4 KB is the page size, therefore from there on every access lands on a new page and needs its own page table lookup, and hardware prefetchers generally will not follow a stream across a page boundary either.</p>
+
+<h2 id="the-prefetcher">The Prefetcher</h2>
+
+<p>The other line in Figure 1, “Front to back”, reads exactly the same working sets in order, and it barely moves. It takes about 0.8 ns per cache line while the data fits in cache and only 1.3 ns per line with 512 MB in DRAM, which is roughly 48 GB/s from a single core. The DRAM did not get any faster. The prefetcher watched the addresses climb one line at a time and started fetching lines before the loop asked for them, so by the time each load happens the data is already sitting in cache.</p>
+
+<p>This is the part of the machine I find the most cybernetic. Norbert Wiener’s anti-aircraft predictor in the 1940s took the past path of a plane and extrapolated where it would be by the time a shell got there. A stride prefetcher is the same idea moved into the memory system, extrapolating where your loop will be by the time a cache line can get there. It only knows the past, and it is only right because most loops are boringly predictable.</p>
+
+<p>Layout decides how predictable a program looks, even when the code does not change at all. I built the same 4 million node linked list twice, each node padded to one cache line, once with the nodes laid out in memory in list order and once scattered at random, and walked both with the same loop:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">for</span> <span class="p">(</span><span class="n">list_node_t</span> <span class="o">*</span><span class="n">node</span> <span class="o">=</span> <span class="n">head</span><span class="p">;</span> <span class="n">node</span> <span class="o">!=</span> <span class="nb">NULL</span><span class="p">;</span> <span class="n">node</span> <span class="o">=</span> <span class="n">node</span><span class="o">-&gt;</span><span class="n">next</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="n">sum</span> <span class="o">+=</span> <span class="n">node</span><span class="o">-&gt;</span><span class="n">value</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>In order it takes 2.4 ns per node. Scattered it takes 119 ns per node, 50 times slower, and the only thing that changed is where the nodes ended up.</p>
+
+<h2 id="when-nothing-can-be-predicted">When Nothing Can Be Predicted</h2>
+
+<p>The last benchmark was supposed to be the one where software prefetching saves the day. It reads random elements out of a 512 MB array, <code class="language-plaintext highlighter-rouge">data[index[i]]</code>, and optionally asks for the element <code class="language-plaintext highlighter-rouge">distance</code> iterations ahead with <code class="language-plaintext highlighter-rouge">__builtin_prefetch</code>:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">for</span> <span class="p">(</span><span class="kt">size_t</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0U</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">GATHER_LENGTH</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="k">if</span> <span class="p">((</span><span class="n">distance</span> <span class="o">!=</span> <span class="mi">0U</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="p">((</span><span class="n">i</span> <span class="o">+</span> <span class="n">distance</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">GATHER_LENGTH</span><span class="p">))</span>
+    <span class="p">{</span>
+        <span class="n">__builtin_prefetch</span><span class="p">(</span><span class="o">&amp;</span><span class="n">data</span><span class="p">[</span><span class="n">index</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="n">distance</span><span class="p">]]);</span>
+    <span class="p">}</span>
+    <span class="n">sum</span> <span class="o">+=</span> <span class="n">data</span><span class="p">[</span><span class="n">index</span><span class="p">[</span><span class="n">i</span><span class="p">]];</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Without any prefetching it already only takes 9.5 ns per element, which looks wrong at first, since every one of those reads is a random access into DRAM and DRAM was costing 125 ns a moment ago. The best prefetch distance only brought it down to 7.4 ns.</p>
+
+<figure>
+  <img src="/content/a5/dependent-loads.svg" alt="Bar chart of time per element: linked list in order 2.4 ns, linked list scattered 119.4 ns, random gather 9.5 ns, random gather with software prefetch 7.4 ns" />
+  <figcaption><b>Figure 3:</b> Dependent and independent random loads.</figcaption>
+</figure>
+
+<p>The difference between the scattered list and the random gather is the whole point. In the list the address of the next node lives <em>inside</em> the current node, therefore the CPU cannot even start the next load until the current one comes back, and every node pays the full trip to DRAM. In the gather every address comes from <code class="language-plaintext highlighter-rouge">index[]</code>, which is read front to back, so the out-of-order core can keep a pile of loads in flight at once. At 9.5 ns per element against roughly 125 ns of latency, that is about 13 loads overlapping. The prefetch hint only had the leftover 22% to work with, since the core was already doing most of the job on its own.</p>
+
+<p>The two lists in Figure 3 hold the same 4 million values and are walked by the same loop. The one laid out in order takes 10 ms. The scattered one takes half a second.</p>]]></content><author><name></name></author><summary type="html"><![CDATA[Every cache is a bet that the future will look like the past. Hume spent a good part of the 1700s pointing out that there is no logical reason it should (the sun rising every morning so far proves nothing about tomorrow), and yet every desktop CPU is built on exactly that bet: whatever you touched a moment ago you will probably touch again, and whatever sits right next to it you will probably want next. Those two assumptions are temporal and spatial locality, and I wanted to know what the bet is actually worth, both when it pays off and when it does not.]]></summary></entry><entry><title type="html">Playing with My Cache</title><link href="https://dansop.github.io/posts/Playing-with-My-Cache/" rel="alternate" type="text/html" title="Playing with My Cache" /><published>2025-12-23T00:00:00+00:00</published><updated>2025-12-23T00:00:00+00:00</updated><id>https://dansop.github.io/posts/Playing-with-My-Cache</id><content type="html" xml:base="https://dansop.github.io/posts/Playing-with-My-Cache/"><![CDATA[<p>We will be diving into several memory optimization techniques that I’ve picked up or have seen from working on several projects. The following are the topics that I found interesting and associated with cache/memory optimization and usage. The applications will focus on more resource-constrained systems such as embedded systems, but both examples will likely be provided (if I get around to doing both).</p>
+
+<ul>
+  <li>True and False Sharing</li>
+  <li>Padding</li>
+  <li>Cache Invalidation vs Write-Back</li>
+  <li>Hot/Cold Data</li>
+</ul>
+
+<h2 id="true-and-false-sharing">True and False Sharing</h2>
+
+<p>False sharing is a term associated with a specific type of performance bottleneck in modern parallel programming. It will occur when two (or more) processors inadvertently fight or attempt to access the same single piece of hardware memory. For our case we will focus on the hardware memory being a cache line. But first! Some extremely simplified and very generic background information on how a CPU typically talks to RAM and its association with the cache line.</p>
+
+<p>When a CPU needs to read some data from the memory, it is typically done in the smallest fixed-size unit possible (typically 64 bytes). Instead of fetching individual bytes of memory from a slower external RAM or shared RAM, the processor will bring in this entire line containing the requested data to a faster local memory region. The idea is simple, fetching one byte at a time would be slow, so instead let’s just snag up the whole block and store it nearby. This block of data is what we call a cache line.</p>
+
+<figure>
+  <img src="/content/a1/a1_p1.svg" alt="Two CPUs with private L1 and L2 caches holding copies of D1 and D2, kept consistent by cache coherency over a shared L3 cache" />
+  <figcaption><b>Figure 1:</b> Picture of a CPU/Cache setup.</figcaption>
+</figure>
+
+<p>Note that for the diagram I showed the L1 and the L2 cache being localized to the core and L3 being shared. This is a fairly typical setup for modern day architectures but it is still a generic example. We can have false/true sharing between the L1 cache and L3 cache, L2 cache and L3 cache, and even L(x) cache (as long as it is localized to the core) and any external RAM that is added to the system.</p>
+
+<p>Here is where the fun term “<strong>Cache Coherency</strong>” comes into play. This term will be used a lot so lets define it as a way of keeping data consistent across multiple cores and hence multiple threads/tasks. Each core has its own cache controller that manages this and it is entirely hardware driven (spoiler it is not, see cache cleaning for more on this).</p>
+
+<p>Now lets get back to that whole false sharing idea. If two cores need the same data, say <em>X</em>, when core 0 updates <em>X</em> in the external region of memory, core 1 must be notified so that its cache is updated to the new value (that whole cache coherency thing). Believe it or not this is called “<strong>True Sharing</strong>” as this is an intended implementation of the data as it is meant to be shared.</p>
+
+<p>False sharing on the other hand is the exact… same… thing? Now rather than my awful term “thing” let us describe this process as a mechanism. An unwanted application of this mechanism is when both cores end up working with different variables that just happen to sit on the same cache line; that whole damn cache coherency thingy treats the entire line as one unit, therefore when core 0 updates its variable/data, core 1’s cache line is invalidated or becomes stale even though it does not need the data that core 0 is updating. This means that poor ole core 1 has to fetch the cache line from the shared memory again wasting precious cycles and bandwidth.</p>
+
+<p>Let me reiterate this, the hardware is doing exactly what it’s supposed to do, but in this specific case it’s unintentional and causes a pretty big performance hit. A lovely diagram of the cache line being shared is shown below:</p>
+
+<figure>
+  <img src="/content/a1/a1_p2.svg" alt="One cache line holding both D1 and D2, shared between two L2 caches and the L3 cache" />
+  <figcaption><b>Figure 2:</b> Cache Line.</figcaption>
+</figure>
+
+<p>To quickly summarize, <strong>False Sharing</strong> is when two or more cores are working on independent variables or data that is stored on the same cache line. Each separate core will invalidate the cache line when the data is changed, therefore the respective core that did not update its own variable and invalidate the cache will be forced to fetch this cache line again if it wants to operate on its own variable. More fetches = slower execution  = slop.</p>
+
+<p>Now that is cool and all; lots of talking about RAM and cache and fun things, but lets see some real examples of <strong>True and False Sharing</strong>.</p>
+
+<h6 id="linuxgcc-false-sharing-example">Linux/GCC False Sharing Example</h6>
+
+<p>These examples were compiled using GCC and were intentionally simple. This program will spawn two threads that access data in a structure. For the first example we will show <strong>False Sharing</strong>:</p>
+
+<ul>
+  <li><strong>Example 1:</strong></li>
+</ul>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cp">#include</span> <span class="cpf">&lt;pthread.h&gt;</span><span class="cp">
+#include</span> <span class="cpf">&lt;stdio.h&gt;</span><span class="cp">
+#include</span> <span class="cpf">&lt;stdint.h&gt;</span><span class="cp">
+</span>
+<span class="cp">#define ITERATIONS 10000000
+</span>
+<span class="k">typedef</span> <span class="k">struct</span> 
+<span class="p">{</span> 
+  <span class="kt">uint64_t</span> <span class="n">value</span><span class="p">;</span> 
+  <span class="kt">uint32_t</span> <span class="n">id</span><span class="p">;</span> 
+<span class="p">}</span> <span class="n">Data</span><span class="p">;</span>
+
+<span class="k">struct</span> 
+<span class="p">{</span>
+  <span class="n">Data</span> <span class="n">d1</span><span class="p">;</span>
+  <span class="n">Data</span> <span class="n">d2</span><span class="p">;</span>
+<span class="p">}</span> <span class="n">cache_line</span> <span class="o">=</span> <span class="p">{</span> <span class="mi">0</span> <span class="p">};</span>  
+
+<span class="kt">void</span> <span class="o">*</span> <span class="nf">thread1</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span> <span class="n">arg</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="k">for</span><span class="p">(</span><span class="kt">int</span> <span class="n">i</span><span class="o">=</span><span class="mi">0</span><span class="p">;</span> <span class="n">i</span><span class="o">&lt;</span><span class="n">ITERATIONS</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> 
+  <span class="p">{</span>
+    <span class="n">cache_line</span><span class="p">.</span><span class="n">d1</span><span class="p">.</span><span class="n">value</span><span class="o">++</span><span class="p">;</span>
+    <span class="n">cache_line</span><span class="p">.</span><span class="n">d1</span><span class="p">.</span><span class="n">id</span><span class="o">=</span><span class="n">i</span><span class="p">;</span>
+  <span class="p">}</span>
+  <span class="k">return</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">void</span> <span class="o">*</span> <span class="nf">thread2</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span> <span class="n">arg</span><span class="p">)</span> 
+<span class="p">{</span>
+  <span class="k">for</span><span class="p">(</span><span class="kt">int</span> <span class="n">i</span><span class="o">=</span><span class="mi">0</span><span class="p">;</span> <span class="n">i</span><span class="o">&lt;</span><span class="n">ITERATIONS</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span>
+  <span class="p">{</span>
+    <span class="n">cache_line</span><span class="p">.</span><span class="n">d2</span><span class="p">.</span><span class="n">value</span><span class="o">++</span><span class="p">;</span>
+    <span class="n">cache_line</span><span class="p">.</span><span class="n">d2</span><span class="p">.</span><span class="n">id</span><span class="o">=</span><span class="n">i</span><span class="p">;</span>
+  <span class="p">}</span>
+  <span class="k">return</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">int</span> <span class="nf">main</span><span class="p">()</span> 
+<span class="p">{</span>
+  <span class="n">pthread_t</span> <span class="n">t1</span><span class="p">,</span><span class="n">t2</span><span class="p">;</span>
+  <span class="n">pthread_create</span><span class="p">(</span><span class="o">&amp;</span><span class="n">t1</span><span class="p">,</span><span class="nb">NULL</span><span class="p">,</span><span class="n">thread1</span><span class="p">,</span><span class="nb">NULL</span><span class="p">);</span>
+  <span class="n">pthread_create</span><span class="p">(</span><span class="o">&amp;</span><span class="n">t2</span><span class="p">,</span><span class="nb">NULL</span><span class="p">,</span><span class="n">thread2</span><span class="p">,</span><span class="nb">NULL</span><span class="p">);</span>
+  <span class="n">pthread_join</span><span class="p">(</span><span class="n">t1</span><span class="p">,</span><span class="nb">NULL</span><span class="p">);</span>
+  <span class="n">pthread_join</span><span class="p">(</span><span class="n">t2</span><span class="p">,</span><span class="nb">NULL</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>For the example above the two threads are accessing the same data structure ‘cache_line’ therefore there will be false sharing as both threads are trying to access the same variable.</p>
+
+<p>Now for the example without false sharing, all we do is simply change the cache_line structure’s data to be 64 byte aligned to force separate cache lines, resulting in no false sharing. To do this, we will use the compiler attribute <code class="language-plaintext highlighter-rouge">__attribute__((aligned(64))</code> that tells the compiler to place the variable at a memory address that’s a multiple of 64 bytes. Therefore we change the following code:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// rest of the program above...</span>
+<span class="k">struct</span> 
+<span class="p">{</span>
+  <span class="n">Data</span> <span class="n">d1</span> <span class="n">__attribute__</span><span class="p">((</span><span class="n">aligned</span><span class="p">(</span><span class="mi">64</span><span class="p">)));</span>
+  <span class="n">Data</span> <span class="n">d2</span> <span class="n">__attribute__</span><span class="p">((</span><span class="n">aligned</span><span class="p">(</span><span class="mi">64</span><span class="p">)));</span>
+<span class="p">}</span> <span class="n">cache_line</span> <span class="o">=</span> <span class="p">{</span> <span class="mi">0</span> <span class="p">};</span>
+<span class="c1">// rest of the program below...</span>
+</code></pre></div></div>
+
+<p>The result after compiling the applications and using <code class="language-plaintext highlighter-rouge">time</code> for both applications is the following:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">(</span>base<span class="o">)</span> danny@linux:<span class="nv">$ </span><span class="nb">time</span> ./no_sharing 
+real    0m0.017s
+user    0m0.032s
+sys     0m0.000s
+<span class="o">(</span>base<span class="o">)</span> danny@linux:<span class="nv">$ </span><span class="nb">time</span> ./false_sharing 
+real    0m0.038s
+user    0m0.061s
+sys     0m0.004s
+</code></pre></div></div>
+
+<p>Right away we can see the functionality of both programs are the same, but since one has the data structures aligned on 64 byte memory addresses this allows the local core specific cache to never be invalidated by another core, thus we see up to a ~50% performance increase in running this application as no false sharing is taking place.</p>
+
+<p>We can also look at the cache misses themselves through the usage of <code class="language-plaintext highlighter-rouge">perf</code> on Linux, resulting in the following information:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">(</span>base<span class="o">)</span> danny@linux:<span class="nv">$ </span><span class="nb">sudo </span>perf <span class="nb">stat</span> <span class="nt">-e</span> cache-references,cache-misses,L1-dcache-load-misses ./no_sharing
+
+55,489       cpu_core/cache-references/
+ 8,375       cpu_core/cache-misses/
+13,682       cpu_core/L1-dcache-load-misses/
+
+<span class="o">(</span>base<span class="o">)</span> danny@linux:<span class="nv">$ </span><span class="nb">sudo </span>perf <span class="nb">stat</span> <span class="nt">-e</span> cache-references,cache-misses,L1-dcache-load-misses ./false_sharing
+
+858,174      cpu_core/cache-references/
+  9,168      cpu_core/cache-misses/
+363,549      cpu_core/L1-dcache-load-misses/
+</code></pre></div></div>
+
+<p>This tells us more information about the performance impact on false sharing as it has nearly 17x more cache references and 33x more L1 cache misses. Mainly the important part here is the performance impact on the overall time, that is a direct result of the performance impact on the L1 data cache misses, as each thread is invalidating the other’s cache; the CPU is putting in overtime as it is constantly reloading the cache line from the L2/L3 cache (whichever is shared between the cores).</p>
+
+<h2 id="padding">Padding</h2>
+
+<p>Great, you discovered false sharing is the bane of your existence and it is causing you major performance issues. I’ve already shown you once solution by using compiler atrributes to ensure data structures are 64 byte aligned, but there is also another common practice I have seen to fix this issue. This next section, padding, is the other common practice to fix false sharing.</p>
+
+<p>I want to put a note here that I recommend using the compiler attribute for aligning memory rather than padding, as they are functionally the same but padding could potentially become unreadable for a future developer.</p>
+
+<p>This becomes explicitly clear when we modify example 1 to using padding rather than alignment:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// rests of the program above...</span>
+<span class="k">typedef</span> <span class="k">struct</span> 
+<span class="p">{</span> 
+  <span class="kt">uint64_t</span> <span class="n">value</span><span class="p">;</span> 
+  <span class="kt">uint32_t</span> <span class="n">id</span><span class="p">;</span> 
+  <span class="kt">char</span> <span class="n">wasted_bytes</span><span class="p">[</span><span class="mi">52</span><span class="p">];</span> <span class="c1">// padding :)</span>
+<span class="p">}</span> <span class="n">Data</span><span class="p">;</span>
+<span class="c1">// rest of the program below...</span>
+</code></pre></div></div>
+
+<p>If we change the <code class="language-plaintext highlighter-rouge">Data</code> structure definition to use padding we get the same performance increase as no false sharing is happening anymore. This is because the 52 byte padding after the first two variables ensures the entire structure is 64 bytes, meaning that two of these structures cannot exist on the same cache line at the same time.</p>
+
+<p>This manual padding works, but it looks fairly gross and comes with some potential issues down the line. First of all we are wasting bytes by adding padding (not that aligning is any better in this aspect). It should be noted that these bytes could be replaced with data in the future. I refer to padding as “I know what I am doing” approach, since you have to manually calculate each individual element and add all the bytes together to know how much padding to add.</p>
+
+<p>This is fine for my simple example, but can you imagine doing this for 10+ structures with a massive amount of elements containing other structures? This calculation starts to be cumbersome and furthermore if any variable is added to this structure in the future the padding has to be recalculated. The math gets annoying fast and your coworkers might yell at you if they have to pull out a calculator everytime they want to add an element to a structure.</p>
+
+<p>The upside of padding? It’s portable. Padding works on literally every C compiler ever made. MSVC, GCC, Clang, etc… nonetheless I still recommend using the compiler attributes for a modern approach.</p>
+
+<figure>
+  <img src="/content/a1/a1_p3.svg" alt="D1 and D2 placed on their own 64-byte cache line, once with explicit padding bytes and once with a compiler alignment attribute" />
+  <figcaption><b>Figure 3:</b> Padding vs Attribute.</figcaption>
+</figure>
+
+<h2 id="cache-invalidation-vs-write-back">Cache Invalidation vs Write-Back</h2>
+
+<p>Let’s get this straight, caches exist to cheat by letting the CPU pretend memory is fast, local, and exclusive. This facade crumbles by a simple touch of the memory by any other peripheral.</p>
+
+<p>The only way to restore reality for this CPU is to use two blunt tools provided by software:</p>
+
+<ul>
+  <li>Write-Back (clean)</li>
+  <li>Invalidation</li>
+</ul>
+
+<p>These are not optimizations bur rather correctness mechanisms and getting them wrong produces bugs that ignore most debuggers and will likely disappear under logging. Only reappearing at the worst possible time. We must understand why these operations exist in the first place, and how they are related to cache.</p>
+
+<h4 id="two-fundamental-cache-issues">Two Fundamental Cache Issues</h4>
+
+<p>All cache bugs or issues are reduced to one of the following:</p>
+
+<p>1) The memory is newer than the cache
+2) The cache is newer than the memory</p>
+
+<p>We first look at the case where the cache is newer than the memory. A write-back forces the dirty cache lines to be written to main memory without them being cleared from the cache. Why is this needed you may ask? Well I am going to answer this from the perspective of a DMA (direct memory access controller).</p>
+
+<p>A DMA allows data to flow from a peripheral directly into memory (or vice versa) while ignoring the CPU. We can think of the flow as going from Disk -&gt; RAM rather than Disk -&gt; CPU -&gt; RAM. We can think of the DMA being “blind” to the CPU’s cache, which creates two major risks that require cleaning and invalidation.</p>
+
+<figure>
+  <img src="/content/a1/a1_p4.svg" alt="A DMA controller moving D1 and D2 between an external peripheral and main memory, outside the CPU's L1 and L2 caches" />
+  <figcaption><b>Figure 4:</b> Generic DMA setup.</figcaption>
+</figure>
+
+<p>Imagine core 0 has a piece of data in its L1 cache. Meanwhile, a DMA controller writes a new version of data directly into the main memory. Core 0 does not know that the memory has changed externally and keeps its old and stale cached version. Therefore to fix this, the system must invalidate that cache line so the CPU is forced to fetch the new data from RAM.</p>
+
+<p>Now if we look at this problem from a different angle, if the CPU has modified data in its cache but has not written it back to RAM yet, then the DMA controller tries to read that data from RAM to send it to a disk or elsewhere but it is reading old data. Therefore the CPU must flush (write-back) its cache to RAM before the DMA starts its job.</p>
+
+<p>You may be wondering, well what the hell when we looked at false sharing those cores had cache coherency that automatically performed the L1 cache hits and automatically updated data for the cores (at a cost of performance of course). So why are we having to do this invalidation and write-back manually now?</p>
+
+<p>To answer this as generically as possible, it comes down to Cache Coherenc*… the gift that keeps giving. Cache coherency does not mean, “memory always updates itself everywhere to the newest version”, a better explanation is:</p>
+
+<blockquote>
+  <p>Cache coherency relies on participants to agree on the value of a cache line when they talk through a coherency fabric</p>
+</blockquote>
+
+<p>Coherency is a protocol controlled by the cache controller; a DMA engine does not have a cache controller therefore it cannot participate in cache coherence and therefore its writes go unnoticed by the CPU caches (hence when software has to be involved). From the definition it should be noted that coherency fabric is the hardware network that lets the cache controllers maintain themselves and other caches.</p>
+
+<p>You must always ensure that your data is not stale if using systems that are not connected directly to your cache controller; flushing (Write-back) and cleaning (invalidation) mechanisms must be used.</p>
+<h2 id="hotcold-data">Hot/Cold Data</h2>
+
+<p>Another interesting topic relating to cache is managing hot and cold data. Just like how your morning coffee is better hot and your Blue Ocean on a sunny day is better cold, different types of data belong in different places based on how often they are used.</p>
+
+<p>Therefore we must develop and understand the relationship between this hot data, cold data, and its relevance to the cache to build systems that are lightning fast.</p>
+
+<p>We define “Hot Data” as the active working set of data that holds information being accessed and modified right now. Ideally, this data must live in the cache or another high performance memory location</p>
+
+<p>We define “Cold Data” as information you rarely visit or look at but the data still must exist. Ideally, this data lives in a slow storage location as it is not needed.</p>
+
+<p>We note that we can have both hot data and cold data in the same structure and hence problems arise regarding the cache. A single hot field or variables can drag its cold neighbors into the cache or a cold field could evict unrelated hot data. Essentially if hot and cold data live in the same cache line, the cache treats them equally even if the software does not.</p>
+
+<p>So what is a common way to ensure the hot and cold data remain separated at the cache level? Well the simplest and highest impact optimization is to perform hot/cold splitting. Now this can look different depending on your scenario. For example, say you are using a complex library with a massive stack that is made up of individual blocks of memory that you can allocate anywhere in your system. You may choose to allocate the “hottest” or most used portions of this stack to the faster regions of memory available to you.</p>
+
+<p>For a much simpler example say we have the following structure:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">typedef</span> <span class="k">struct</span> 
+<span class="p">{</span>
+  <span class="kt">int</span> <span class="n">coffee</span><span class="p">;</span>       <span class="c1">// hot</span>
+  <span class="kt">float</span> <span class="n">fire</span><span class="p">,</span> <span class="n">lava</span><span class="p">;</span> <span class="c1">// hot</span>
+  <span class="kt">char</span> <span class="n">winter</span><span class="p">[</span><span class="mi">32</span><span class="p">];</span>  <span class="c1">// cold</span>
+  <span class="kt">int</span> <span class="n">snow</span><span class="p">;</span>         <span class="c1">// cold</span>
+<span class="p">}</span> <span class="n">object</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p>We know this structure is made up of hot and cold aspects, therefore we can perform a super simple hot/cold splitting of the data:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Fast cache please</span>
+<span class="k">typedef</span> <span class="k">struct</span> 
+<span class="p">{</span>
+  <span class="kt">int</span> <span class="n">coffee</span><span class="p">;</span>       <span class="c1">// hot</span>
+  <span class="kt">float</span> <span class="n">fire</span><span class="p">,</span> <span class="n">lava</span><span class="p">;</span> <span class="c1">// hot</span>
+<span class="p">}</span> <span class="n">hot_object</span><span class="p">;</span>
+
+<span class="c1">// I do not care where I am placed</span>
+<span class="k">typedef</span> <span class="k">struct</span> 
+<span class="p">{</span>
+  <span class="kt">char</span> <span class="n">winter</span><span class="p">[</span><span class="mi">32</span><span class="p">];</span>  <span class="c1">// cold</span>
+  <span class="kt">int</span> <span class="n">snow</span><span class="p">;</span>         <span class="c1">// cold</span>
+<span class="p">}</span> <span class="n">cold_object</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p>For this example, we would want to ensure that the hot data object is placed in the fastest cache possible. This also relates to another topic called “Cold Start” where when a system first starts the cache is empty therefore all requests for hot data result in cache misses, forcing the system to go all the way back to cold data (you can also pre-heat the cache so that it does not have misses on startup).</p>]]></content><author><name></name></author><summary type="html"><![CDATA[We will be diving into several memory optimization techniques that I’ve picked up or have seen from working on several projects. The following are the topics that I found interesting and associated with cache/memory optimization and usage. The applications will focus on more resource-constrained systems such as embedded systems, but both examples will likely be provided (if I get around to doing both).]]></summary></entry><entry><title type="html">Making SciPy and CMSIS-DSP Agree</title><link href="https://dansop.github.io/posts/Making-SciPy-and-CMSIS-DSP-Agree/" rel="alternate" type="text/html" title="Making SciPy and CMSIS-DSP Agree" /><published>2024-04-20T00:00:00+00:00</published><updated>2024-04-20T00:00:00+00:00</updated><id>https://dansop.github.io/posts/Making-SciPy-and-CMSIS-DSP-Agree</id><content type="html" xml:base="https://dansop.github.io/posts/Making-SciPy-and-CMSIS-DSP-Agree/"><![CDATA[<p>Designing a filter in Python takes about three lines. Getting a microcontroller to run that same filter in fixed point, and actually produce the same output, is where the afternoon goes. The filter in SciPy is the map (exact coefficients, 64-bit floats, no opinions), and the one running in Q31 on a Cortex-M is the territory. I put together <a href="https://github.com/DanSop/CMSIS-DSP-with-SciPy-Example">a small project</a> to check one against the other: SciPy designs a six band equalizer, the coefficients get converted to Q31, and the exact same coefficients are run through ARM’s CMSIS-DSP library so the two outputs can be compared side by side.</p>
+
+<p>The bank is octave spaced at a 16 kHz sample rate, with band centres from 100 Hz up to 3.2 kHz. Each band edge sits at the geometric mean of two neighbouring centres, so the first band runs from 70.7 Hz to 141.4 Hz, the next from 141.4 Hz to 282.8 Hz, and so on up to 4.5 kHz. Every band is a third-order Butterworth bandpass, which turns into a sixth-order filter once the lowpass prototype is mapped onto a band.</p>
+
+<figure>
+  <img src="/content/a6/filter-bank.svg" alt="Magnitude response in dB of six octave-spaced Butterworth bandpass filters from about 70 Hz to 4.5 kHz, with the responses rebuilt from the Q31 coefficients drawn dashed on top of the floating point ones" />
+  <figcaption><b>Figure 1:</b> The six band filter bank, floating point and Q31.</figcaption>
+</figure>
+
+<h2 id="one-section-or-three">One Section or Three</h2>
+
+<p>SciPy will happily hand you that sixth-order filter as a single transfer function, seven numerator and seven denominator coefficients, and CMSIS-DSP would happily run it as one long difference equation. It is the lowest band that makes this a bad idea. A band from 70.7 Hz to 141.4 Hz is less than one percent of the sample rate wide, therefore all six poles crowd into a tiny patch of the z-plane just inside \(z = 1\), and the polynomial they come from has coefficients as large as 19.4. To fit that into Q31 every coefficient has to be scaled down by \(2^5\), which leaves a resolution of \(2^{-26}\), about \(1.5 \times 10^{-8}\).</p>
+
+<p>That sounds like plenty. Rounding the seven denominator coefficients to that grid and solving for the roots again gives the orange crosses in Figure 2. One pair of poles lands at \(\lvert z \rvert = 1.00076\), outside the unit circle, and a real pole lands exactly on \(z = 1\). A filter with a pole outside the unit circle is unstable, so the single-section version of band 1 does not survive the conversion at all (it would ring up from the first sample and never come back down).</p>
+
+<figure>
+  <img src="/content/a6/band1-poles.svg" alt="Pole positions for band 1 near z = 1. The poles of the three Q31 biquads sit inside the unit circle where they were designed, while the single sixth-order section rounded to Q31 has a pair of poles just outside the circle at magnitude 1.00076 and a real pole on the circle" />
+  <figcaption><b>Figure 2:</b> Band 1 poles after rounding to Q31, three biquads against one sixth-order section.</figcaption>
+</figure>
+
+<p>Split into three second-order sections, biquads, the same band has coefficients no bigger than about 2, and each section only has to place its own pair of poles. After rounding to Q31 the biquad poles match the design to six decimal places, with the largest still sitting at \(\lvert z \rvert = 0.995129\). The higher bands are much less touchy; by band 6 the single-section poles do not move in the first six decimal places. It is purely the poles bunched up near \(z = 1\) that cannot take the rounding, which is the usual reason every fixed-point IIR filter ends up as a cascade of biquads.</p>
+
+<h2 id="the-postshift">The Postshift</h2>
+
+<p>Even the biquads do not fit Q31 directly. Q31 only holds values in \([-1, 1)\), and in the lowest band the first feedback coefficient is about 1.97. CMSIS-DSP’s answer is the postshift: every coefficient is divided by \(2^{\text{postShift}}\) before it is converted, and the library shifts each stage’s result back up by the same number of bits. With a postshift of 4 everything fits with room to spare:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">coefs</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">hstack</span><span class="p">((</span><span class="n">sos</span><span class="p">[:,</span> <span class="p">:</span><span class="mi">3</span><span class="p">],</span> <span class="o">-</span><span class="n">sos</span><span class="p">[:,</span> <span class="mi">4</span><span class="p">:])),</span> <span class="mi">15</span><span class="p">)</span>
+<span class="n">coefs</span> <span class="o">=</span> <span class="n">coefs</span> <span class="o">/</span> <span class="p">(</span><span class="n">POSTSHIFT</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+<span class="n">coefsQ31</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nb">round</span><span class="p">(</span><span class="n">coefs</span> <span class="o">*</span> <span class="p">(</span><span class="mi">2</span> <span class="o">**</span> <span class="mi">31</span><span class="p">))</span>
+</code></pre></div></div>
+
+<p>Two details in there are easy to get wrong. CMSIS-DSP expects the feedback coefficients with the opposite sign to SciPy, hence the <code class="language-plaintext highlighter-rouge">-sos[:, 4:]</code>, and it does not want the leading \(a_0\) at all, which is why only five of SciPy’s six numbers per section survive. Dividing by <code class="language-plaintext highlighter-rouge">POSTSHIFT ** 2</code> also only works because \(4^2\) happens to equal \(2^4\) (the general form is <code class="language-plaintext highlighter-rouge">2 ** POSTSHIFT</code>).</p>
+
+<p>The rounding to 31 bits barely moves the response. The dashed lines in Figure 1 are rebuilt from the rounded Q31 coefficients and sit right on top of the floating point ones, with the worst difference inside any passband at 0.005 dB.</p>
+
+<h2 id="32-or-64-bits-of-state">32 or 64 Bits of State</h2>
+
+<p>The coefficients are only half of it. In CMSIS-DSP’s Q31 biquad, <code class="language-plaintext highlighter-rouge">arm_biquad_cascade_df1_q31</code>, every section accumulates in 64 bits but truncates its output back down to 32 bits before it is stored and fed into the next section. The variant <code class="language-plaintext highlighter-rouge">arm_biquad_cas_df1_32x64_q31</code> keeps that state at 64 bits instead, for more cycles and twice the state memory. My C code uses the 64-bit version for the three lowest bands and the plain one for the rest, and the comment beside it just says “improved noise performance”, so I measured it.</p>
+
+<p>The test runs a sine at the centre of each band through both CMSIS-DSP functions, with the input scaled down by 8 the same way the C code does for headroom, and compares the output against SciPy running the <em>same rounded coefficients</em> in floating point. With the coefficients identical on both sides, the only difference left is the arithmetic. Skipping the first half second while the filters settle, Figure 3 shows the signal-to-noise ratio for a quiet input at -60 dBFS (measured before the divide by 8).</p>
+
+<figure>
+  <img src="/content/a6/state-noise.svg" alt="Bar chart of SNR at -60 dBFS per band for 32-bit and 64-bit state. At 100 Hz the 32-bit state gives 31 dB and the 64-bit state 92 dB; the gap shrinks with frequency until the two are within 2 dB at 3.2 kHz" />
+  <figcaption><b>Figure 3:</b> SNR at -60 dBFS for each band, 32-bit and 64-bit state.</figcaption>
+</figure>
+
+<p>In the 100 Hz band the 32-bit state gives 31 dB, against 92 dB for the 64-bit state, so the cheaper function throws away 61 dB on a quiet signal. The gap shrinks band by band, 32 dB at 200 Hz and 29 dB at 800 Hz, until at 3.2 kHz the two are within 2 dB of each other. Louder signals hide it somewhat (at -6 dBFS band 1 still goes from 91 dB to 148 dB), but quiet passages are exactly where a noise floor gets heard. The reason is the same poles as before: the closer a pole sits to the unit circle, the longer the filter keeps recirculating every rounding error it makes, and nothing sits closer than band 1.</p>
+
+<p>So the lowest band is where everything concentrates. As one section it does not survive the rounding at all, and with 32-bit state it gives up 61 dB on a quiet input. The 3.2 kHz band would not have noticed either mistake.</p>]]></content><author><name></name></author><summary type="html"><![CDATA[Designing a filter in Python takes about three lines. Getting a microcontroller to run that same filter in fixed point, and actually produce the same output, is where the afternoon goes. The filter in SciPy is the map (exact coefficients, 64-bit floats, no opinions), and the one running in Q31 on a Cortex-M is the territory. I put together a small project to check one against the other: SciPy designs a six band equalizer, the coefficients get converted to Q31, and the exact same coefficients are run through ARM’s CMSIS-DSP library so the two outputs can be compared side by side.]]></summary></entry><entry><title type="html">The Absurd and the Undefined</title><link href="https://dansop.github.io/posts/The-Absurd-and-the-Undefined/" rel="alternate" type="text/html" title="The Absurd and the Undefined" /><published>2022-10-21T00:00:00+00:00</published><updated>2022-10-21T00:00:00+00:00</updated><id>https://dansop.github.io/posts/The-Absurd-and-the-Undefined</id><content type="html" xml:base="https://dansop.github.io/posts/The-Absurd-and-the-Undefined/"><![CDATA[<p>GCC 12 compiles this function to <code class="language-plaintext highlighter-rouge">return 1;</code>:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">int</span> <span class="nf">will_overflow</span><span class="p">(</span><span class="kt">int</span> <span class="n">x</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="k">return</span> <span class="n">x</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">&gt;</span> <span class="n">x</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mov    eax, 0x1          // return value = 1
+ret
+</code></pre></div></div>
+
+<p>Mathematically <code class="language-plaintext highlighter-rouge">x + 1 &gt; x</code> is always true, but in 32-bit arithmetic it should not be when <code class="language-plaintext highlighter-rouge">x</code> is <code class="language-plaintext highlighter-rouge">INT_MAX</code>, since <code class="language-plaintext highlighter-rouge">x + 1</code> wraps around to <code class="language-plaintext highlighter-rouge">INT_MIN</code>. GCC does this even at <code class="language-plaintext highlighter-rouge">-O0</code>.</p>
+
+<p>The reason is that the C standard lists a long set of things a valid program never does: overflow a signed integer, access an object through a pointer of the wrong type, dereference a null pointer, and so on. If a program does one of them anyway, the standard places <em>no requirements at all</em> on what happens, and compilers read that as permission. A valid program never overflows a signed integer, therefore the compiler is allowed to assume a signed addition never overflows and to optimize on that basis. Every listing here comes from GCC 12 for x86-64 at <code class="language-plaintext highlighter-rouge">-O2</code> (plus <code class="language-plaintext highlighter-rouge">-fcf-protection=none</code>), so any of them can be pasted into Compiler Explorer.</p>
+
+<p>Making <code class="language-plaintext highlighter-rouge">x</code> unsigned, where wrapping is defined, keeps a real comparison, and so does compiling the signed version with <code class="language-plaintext highlighter-rouge">-fwrapv</code>, which tells GCC that signed overflow wraps:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>xor    eax, eax          // result = 0
+cmp    edi, 0x7fffffff   // is x == INT_MAX?
+setne  al                // result = (x != INT_MAX)
+ret
+</code></pre></div></div>
+
+<p>With wrapping defined, GCC works out that <code class="language-plaintext highlighter-rouge">x + 1 &gt; x</code> is false for exactly one input, <code class="language-plaintext highlighter-rouge">INT_MAX</code>, and turns the whole function into <code class="language-plaintext highlighter-rouge">x != INT_MAX</code>. Without the flag, an overflow check written as <code class="language-plaintext highlighter-rouge">if (x + 1 &lt; x)</code> on a signed type is removed from the program without any warning.</p>
+
+<h2 id="strict-aliasing">Strict Aliasing</h2>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">int</span> <span class="nf">alias</span><span class="p">(</span><span class="kt">int</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="kt">float</span> <span class="o">*</span><span class="n">b</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="o">*</span><span class="n">a</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="o">*</span><span class="n">b</span> <span class="o">=</span> <span class="mi">2</span><span class="p">.</span><span class="mi">0</span><span class="n">f</span><span class="p">;</span>
+    <span class="k">return</span> <span class="o">*</span><span class="n">a</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>If <code class="language-plaintext highlighter-rouge">a</code> and <code class="language-plaintext highlighter-rouge">b</code> point at the same memory, the store to <code class="language-plaintext highlighter-rouge">*b</code> overwrites <code class="language-plaintext highlighter-rouge">*a</code>, so the function should return the bits of <code class="language-plaintext highlighter-rouge">2.0f</code>. The aliasing rules say an <code class="language-plaintext highlighter-rouge">int</code> cannot be accessed through a <code class="language-plaintext highlighter-rouge">float*</code>, therefore the compiler assumes the two pointers never overlap:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mov    DWORD PTR [rdi], 0x1          // *a = 1
+mov    eax, 0x1                      // return value = 1, without re-reading *a
+mov    DWORD PTR [rsi], 0x40000000   // *b = 2.0f
+ret
+</code></pre></div></div>
+
+<p>It returns <code class="language-plaintext highlighter-rouge">1</code> straight from a register. With <code class="language-plaintext highlighter-rouge">-fno-strict-aliasing</code>, <code class="language-plaintext highlighter-rouge">*a</code> is read again after the store to <code class="language-plaintext highlighter-rouge">*b</code>:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mov    DWORD PTR [rdi], 0x1
+mov    DWORD PTR [rsi], 0x40000000
+mov    eax, DWORD PTR [rdi]          // re-read *a
+ret
+</code></pre></div></div>
+
+<p>Embedded code runs into this fairly often, for example when reading a byte buffer through a <code class="language-plaintext highlighter-rouge">uint32_t*</code> or reinterpreting a <code class="language-plaintext highlighter-rouge">float</code> as an integer. The safe way to reinterpret bits is <code class="language-plaintext highlighter-rouge">memcpy</code>, which the compiler turns into a register move anyway.</p>
+
+<h2 id="the-deleted-null-check">The Deleted Null Check</h2>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">int</span> <span class="nf">read_reg</span><span class="p">(</span><span class="kt">int</span> <span class="o">*</span><span class="n">p</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="kt">int</span> <span class="n">v</span> <span class="o">=</span> <span class="o">*</span><span class="n">p</span><span class="p">;</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">p</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="k">return</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="k">return</span> <span class="n">v</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Dereferencing a null pointer is undefined, and <code class="language-plaintext highlighter-rouge">*p</code> is read first, therefore the compiler concludes that <code class="language-plaintext highlighter-rouge">p</code> cannot be null by the time of the check, and removes the check as dead code:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mov    eax, DWORD PTR [rdi]   // return *p
+ret
+</code></pre></div></div>
+
+<p>The same pattern caused a Linux kernel vulnerability in 2009, where a null check in the <code class="language-plaintext highlighter-rouge">tun</code> driver was removed for exactly this reason. GCC’s <code class="language-plaintext highlighter-rouge">-fno-delete-null-pointer-checks</code> keeps the check:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>test   rdi, rdi                // is p null?
+mov    eax, 0xffffffff         // result = -1
+cmovne eax, DWORD PTR [rdi]    // if not null, result = *p
+ret
+</code></pre></div></div>
+
+<p>On a desktop the deleted check rarely changes the outcome, since reading address <code class="language-plaintext highlighter-rouge">0x0</code> crashes the program before the check would run anyway. A Cortex-M is different. Address <code class="language-plaintext highlighter-rouge">0x0</code> is valid memory there since the vector table is mapped to it, so reading <code class="language-plaintext highlighter-rouge">*p</code> with <code class="language-plaintext highlighter-rouge">p == 0</code> does not fault and just hands back the initial stack pointer. The check is the only thing that would have caught the bug, therefore I recommend <code class="language-plaintext highlighter-rouge">-fno-delete-null-pointer-checks</code> for every firmware build.</p>
+
+<p>The Linux kernel builds with that flag and <code class="language-plaintext highlighter-rouge">-fno-strict-aliasing</code>, plus <code class="language-plaintext highlighter-rouge">-fno-strict-overflow</code>, which implies <code class="language-plaintext highlighter-rouge">-fwrapv</code> on modern GCC.</p>]]></content><author><name></name></author><summary type="html"><![CDATA[GCC 12 compiles this function to return 1;:]]></summary></entry><entry><title type="html">Math Without an FPU</title><link href="https://dansop.github.io/posts/Math-Without-an-FPU/" rel="alternate" type="text/html" title="Math Without an FPU" /><published>2022-06-10T00:00:00+00:00</published><updated>2022-06-10T00:00:00+00:00</updated><id>https://dansop.github.io/posts/Math-Without-an-FPU</id><content type="html" xml:base="https://dansop.github.io/posts/Math-Without-an-FPU/"><![CDATA[<p>The Cortex-M0 has no floating point unit, therefore every <code class="language-plaintext highlighter-rouge">float</code> operation in C turns into a call into a software library. Fixed-point does the same math with plain integer instructions and keeps track of the binary point purely by convention, and I wanted to know how big the difference really is on an STM32F072.</p>
+
+<p>Take a function that multiplies two floats, compiled with <code class="language-plaintext highlighter-rouge">arm-none-eabi-gcc</code> 10.3 at <code class="language-plaintext highlighter-rouge">-O2</code> for <code class="language-plaintext highlighter-rouge">-mcpu=cortex-m0</code>:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">float</span> <span class="nf">f_mul</span><span class="p">(</span><span class="kt">float</span> <span class="n">a</span><span class="p">,</span> <span class="kt">float</span> <span class="n">b</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="k">return</span> <span class="n">a</span> <span class="o">*</span> <span class="n">b</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>It compiles to:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>push  {r4, lr}
+bl    __aeabi_fmul
+pop   {r4, pc}
+</code></pre></div></div>
+
+<p>One <code class="language-plaintext highlighter-rouge">bl</code>. Every float multiply is a call into <code class="language-plaintext highlighter-rouge">libgcc</code>, which unpacks both numbers into sign, exponent and mantissa, multiplies the mantissas with integer instructions, then normalizes, rounds and packs the result back up. <code class="language-plaintext highlighter-rouge">__aeabi_fmul</code> is 588 bytes and <code class="language-plaintext highlighter-rouge">__aeabi_fadd</code> is 828 bytes, so the pair costs 1.4 KB of flash, about 9% of a 16 KB part, before a single line of your own code. (<code class="language-plaintext highlighter-rouge">__aeabi_lmul</code>, the 64-bit integer multiply, is another 90 bytes, and it comes back later.)</p>
+
+<h2 id="fixed-point-and-q-formats">Fixed-Point and Q Formats</h2>
+
+<p>Fixed-point stores a fractional number as an integer, with an agreed position for the binary point. A number in \(Q_{m.n}\) format has \(m\) integer bits and \(n\) fraction bits, and its value is:</p>
+
+\[\text{value} = \frac{\text{stored integer}}{2^n}\]
+
+<p>Q15 is a 16-bit signed integer with 15 fraction bits. It covers \([-1, 1)\) in steps of \(2^{-15} \approx 0.00003\), which suits audio samples and filter coefficients. Q16.16 is a 32-bit signed integer split down the middle, covering roughly \(\pm 32768\) in steps of \(2^{-16} \approx 0.000015\).</p>
+
+<figure>
+  <img src="/content/a4/q-formats.svg" alt="Bit layouts of Q15 (sign and 15 fraction bits, 0x6000 = 0.75) and Q16.16 (sign, 15 integer and 16 fraction bits, 0x0002 8000 = 2.5)" />
+  <figcaption><b>Figure 1:</b> Q15 and Q16.16 bit layouts. <small>(updated 2026)</small></figcaption>
+</figure>
+
+<p>Two numbers in the same format can be added and subtracted as plain integers:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">q16_t</span> <span class="nf">q16_add</span><span class="p">(</span><span class="n">q16_t</span> <span class="n">a</span><span class="p">,</span> <span class="n">q16_t</span> <span class="n">b</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="k">return</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>This compiles to a single <code class="language-plaintext highlighter-rouge">adds r0, r0, r1</code>, compared to a call into the 828-byte <code class="language-plaintext highlighter-rouge">__aeabi_fadd</code>.</p>
+
+<h2 id="multiplication">Multiplication</h2>
+
+<p>Multiplication needs a shift afterwards. Multiplying two Q15 numbers:</p>
+
+\[\begin{aligned}
+\frac{a}{2^{15}} \cdot \frac{b}{2^{15}} &amp;= \frac{a \cdot b}{2^{30}}
+\end{aligned}\]
+
+<p>So the raw product is in Q30 and has to be shifted right by 15 to get back to Q15:</p>
+
+\[\boxed{c = \frac{a \cdot b}{2^{15}}}\]
+
+<p>The product of two 16-bit numbers always fits in 32 bits, so the multiply itself is a single <code class="language-plaintext highlighter-rouge">muls</code> instruction.</p>
+
+<h3 id="rounding">Rounding</h3>
+
+<p>A plain right shift truncates, and since an arithmetic shift rounds toward negative infinity the error is always in the same direction. Over thousands of operations, for example in a filter, that bias accumulates. Adding half of the last bit before shifting turns it into round-to-nearest:</p>
+
+\[c = \frac{a \cdot b + 2^{14}}{2^{15}}\]
+
+<h3 id="overflow">Overflow</h3>
+
+<p>Q15 can represent \(-1\) but not \(+1\), therefore there is exactly one product that overflows: \(-1 \times -1\). To handle it the result is saturated:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">q15_t</span> <span class="nf">q15_mul</span><span class="p">(</span><span class="n">q15_t</span> <span class="n">a</span><span class="p">,</span> <span class="n">q15_t</span> <span class="n">b</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="kt">int32_t</span> <span class="n">product</span> <span class="o">=</span> <span class="p">(</span><span class="kt">int32_t</span><span class="p">)</span><span class="n">a</span> <span class="o">*</span> <span class="p">(</span><span class="kt">int32_t</span><span class="p">)</span><span class="n">b</span><span class="p">;</span>
+
+    <span class="c1">// Round to nearest, then drop the extra 15 fraction bits</span>
+    <span class="n">product</span> <span class="o">+=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">14</span><span class="p">);</span>
+    <span class="n">product</span> <span class="o">&gt;&gt;=</span> <span class="mi">15</span><span class="p">;</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="n">product</span> <span class="o">&gt;</span> <span class="n">INT16_MAX</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="n">product</span> <span class="o">=</span> <span class="n">INT16_MAX</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">product</span> <span class="o">&lt;</span> <span class="n">INT16_MIN</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="n">product</span> <span class="o">=</span> <span class="n">INT16_MIN</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="k">return</span> <span class="p">(</span><span class="n">q15_t</span><span class="p">)</span><span class="n">product</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>GCC compiles this to:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>movs   r3, #128
+lsls   r3, r3, #7       ; r3 = 0x4000 (2^14)
+mov    ip, r3
+movs   r3, #128
+muls   r1, r0           ; a * b
+add    r1, ip           ; + 2^14
+asrs   r0, r1, #15      ; &gt;&gt; 15
+lsls   r3, r3, #8       ; r3 = 0x8000
+cmp    r0, r3           ; did -1 * -1 overflow?
+bne.n  16
+ldr    r0, [pc, #4]     ; saturate to 0x7fff
+sxth   r0, r0
+bx     lr
+</code></pre></div></div>
+
+<p>GCC worked out that the result can never go below <code class="language-plaintext highlighter-rouge">INT16_MIN</code>, so it removed the second check entirely, and it turned the first check into an equality test against the one value that can overflow. Fairly clever for a compiler.</p>
+
+<h3 id="q1616-needs-64-bits">Q16.16 Needs 64 Bits</h3>
+
+<p>For Q16.16 the product of two 32-bit numbers needs 64 bits before the shift. The Cortex-M0 has no 32x32 to 64-bit multiply instruction, so this also becomes a library call, to <code class="language-plaintext highlighter-rouge">__aeabi_lmul</code>. That routine is 90 bytes of integer code rather than all the unpacking, normalizing and rounding done by <code class="language-plaintext highlighter-rouge">__aeabi_fmul</code>, but on an M0 only Q15 multiplication maps directly onto a hardware instruction.</p>
+
+<h2 id="benchmark">Benchmark</h2>
+
+<p>I ran each routine on a NUCLEO-F072RB (STM32F072, Cortex-M0) clocked from its 8 MHz internal oscillator with zero flash wait states. Each operation runs 1000 times over 64 pairs of random operands. The Cortex-M0 has no cycle counter, so the timing comes from the SysTick timer, which counts core clock cycles:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cp">#define NUM_ITERATIONS  1000U
+#define NUM_OPERANDS    64U
+#define SYSTICK_MAX     0x00FFFFFFU
+</span>
+<span class="k">static</span> <span class="kt">uint32_t</span> <span class="nf">run_float</span><span class="p">(</span><span class="kt">float</span> <span class="p">(</span><span class="o">*</span><span class="n">operation</span><span class="p">)(</span><span class="kt">float</span><span class="p">,</span> <span class="kt">float</span><span class="p">))</span>
+<span class="p">{</span>
+    <span class="n">SYST_RVR</span> <span class="o">=</span> <span class="n">SYSTICK_MAX</span><span class="p">;</span>
+    <span class="n">SYST_CVR</span> <span class="o">=</span> <span class="mi">0U</span><span class="p">;</span>
+    <span class="n">SYST_CSR</span> <span class="o">=</span> <span class="mh">0x5U</span><span class="p">;</span>  <span class="c1">// enable SysTick, clocked from the core clock</span>
+
+    <span class="k">for</span> <span class="p">(</span><span class="kt">uint32_t</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0U</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">NUM_ITERATIONS</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="kt">uint32_t</span> <span class="n">n</span> <span class="o">=</span> <span class="n">i</span> <span class="o">%</span> <span class="n">NUM_OPERANDS</span><span class="p">;</span>
+
+        <span class="n">g_floatResult</span> <span class="o">=</span> <span class="n">operation</span><span class="p">(</span><span class="n">g_floatA</span><span class="p">[</span><span class="n">n</span><span class="p">],</span> <span class="n">g_floatB</span><span class="p">[</span><span class="n">n</span><span class="p">]);</span>
+    <span class="p">}</span>
+
+    <span class="k">return</span> <span class="n">SYSTICK_MAX</span> <span class="o">-</span> <span class="n">SYST_CVR</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>The same loop calling an empty function took 23 cycles per iteration, and that baseline is subtracted from each result:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Operation</th>
+      <th>Cycles per op</th>
+      <th>vs. float multiply</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">float</code> multiply</td>
+      <td>166</td>
+      <td>1x</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">float</code> add</td>
+      <td>120</td>
+      <td>1.4x faster</td>
+    </tr>
+    <tr>
+      <td>Q16.16 multiply</td>
+      <td>81</td>
+      <td>2x faster</td>
+    </tr>
+    <tr>
+      <td>Q15 multiply</td>
+      <td>13</td>
+      <td>13x faster</td>
+    </tr>
+    <tr>
+      <td>Q16.16 add</td>
+      <td>1</td>
+      <td>166x faster</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>166 cycles against 13 for the same multiply, and a float add costs as much as 120 fixed-point ones. Q16.16 multiply only gets to twice as fast, because its 64-bit product still goes through <code class="language-plaintext highlighter-rouge">__aeabi_lmul</code>. And once <code class="language-plaintext highlighter-rouge">__aeabi_fmul</code> and <code class="language-plaintext highlighter-rouge">__aeabi_fadd</code> are linked in, they take up their 1.4 KB whether they are called once or a million times.</p>]]></content><author><name></name></author><summary type="html"><![CDATA[The Cortex-M0 has no floating point unit, therefore every float operation in C turns into a call into a software library. Fixed-point does the same math with plain integer instructions and keeps track of the binary point purely by convention, and I wanted to know how big the difference really is on an STM32F072.]]></summary></entry><entry><title type="html">What Happens Before main()?</title><link href="https://dansop.github.io/posts/What-Happens-Before-main/" rel="alternate" type="text/html" title="What Happens Before main()?" /><published>2022-02-18T00:00:00+00:00</published><updated>2022-02-18T00:00:00+00:00</updated><id>https://dansop.github.io/posts/What-Happens-Before-main</id><content type="html" xml:base="https://dansop.github.io/posts/What-Happens-Before-main/"><![CDATA[<p>The first eight bytes of a Cortex-M firmware image are not code. Here they are from a minimal program I built with <code class="language-plaintext highlighter-rouge">arm-none-eabi-gcc</code> 10.3 at <code class="language-plaintext highlighter-rouge">-O2</code> for an STM32F0 with 64 KB of flash and 8 KB of RAM:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>08000000: 00200020 15000008
+</code></pre></div></div>
+
+<p>The bytes look scrambled because the Cortex-M is little-endian, meaning the least significant byte of a number is stored first. Reading each group of four bytes backwards gives the actual values, <code class="language-plaintext highlighter-rouge">0x20002000</code> and <code class="language-plaintext highlighter-rouge">0x08000015</code>. On an STM32F0 flash starts at <code class="language-plaintext highlighter-rouge">0x08000000</code> and RAM at <code class="language-plaintext highlighter-rouge">0x20000000</code>, so the first value is the very top of the 8 KB of RAM (<code class="language-plaintext highlighter-rouge">0x20000000 + 0x2000</code>), and the second points into flash. Between them, those two words are most of the answer to what happens before <code class="language-plaintext highlighter-rouge">main()</code>.</p>
+
+<h2 id="reset-and-the-vector-table">Reset and the Vector Table</h2>
+
+<p>When a Cortex-M comes out of reset, the hardware reads the first word of flash into the stack pointer, reads the second word into the program counter, and only then runs its first instruction, at whatever address the program counter now holds. Those first words are the start of the vector table, a list of addresses that also holds the handlers for every interrupt and fault. The STM32 maps the start of flash to address <code class="language-plaintext highlighter-rouge">0x0</code> when it boots from flash, so the table physically lives at <code class="language-plaintext highlighter-rouge">0x08000000</code>.</p>
+
+<p>The second value is the reset handler’s address, except that <code class="language-plaintext highlighter-rouge">Reset_Handler</code> is really at <code class="language-plaintext highlighter-rouge">0x08000014</code>. That extra 1 in the lowest bit tells the CPU to run the code as Thumb instructions, the compact instruction set that a Cortex-M uses. Every handler address in the table has this bit set, and if it were 0 the CPU would fault on its very first instruction.</p>
+
+<figure>
+  <img src="/content/a3/reset-vector.svg" alt="Vector table at the start of flash, whose first two entries the core loads into SP (0x2000 2000) and PC (0x0800 0014) at reset" />
+  <figcaption><b>Figure 1:</b> What the CPU reads from the vector table at reset. <small>(updated 2026)</small></figcaption>
+</figure>
+
+<p>The stack pointer being loaded first matters more than it looks. Every C function uses the stack for its locals and return addresses, therefore on a lot of other processors the first few instructions after reset have to be written in assembly just to point the stack somewhere sane (on Linux the kernel hands every new process a stack before its first instruction runs). On a Cortex-M the hardware has already done it, so the reset handler can be an ordinary C function. In C the table is just an array of pointers:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">__attribute__</span><span class="p">((</span><span class="n">section</span><span class="p">(</span><span class="s">".isr_vector"</span><span class="p">),</span> <span class="n">used</span><span class="p">))</span>
+<span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">vector_table</span><span class="p">[]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="o">&amp;</span><span class="n">_estack</span><span class="p">,</span>
+    <span class="n">Reset_Handler</span><span class="p">,</span>
+    <span class="n">NMI_Handler</span><span class="p">,</span>
+    <span class="n">HardFault_Handler</span><span class="p">,</span>
+<span class="p">};</span>
+</code></pre></div></div>
+
+<p>The <code class="language-plaintext highlighter-rouge">section(".isr_vector")</code> attribute tells the compiler to put the array in its own section so the linker can place it first in flash, and <code class="language-plaintext highlighter-rouge">used</code> stops the compiler from removing it, since no C code ever reads it. <code class="language-plaintext highlighter-rouge">_estack</code> is the address of the top of RAM, which comes from the linker script further down.</p>
+
+<h2 id="where-variables-live">Where Variables Live</h2>
+
+<p>Here is the program I will be starting:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">uint32_t</span> <span class="n">boot_count</span> <span class="o">=</span> <span class="mi">42</span><span class="p">;</span>
+<span class="kt">uint32_t</span> <span class="n">ticks</span><span class="p">;</span>
+
+<span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="n">boot_count</span><span class="o">++</span><span class="p">;</span>
+    <span class="p">...</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>When the compiler builds this, it sorts everything into the following sections:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">.text</code> holds the machine code for functions.</li>
+  <li><code class="language-plaintext highlighter-rouge">.rodata</code> holds constants and string literals that never change.</li>
+  <li><code class="language-plaintext highlighter-rouge">.data</code> holds global and <code class="language-plaintext highlighter-rouge">static</code> variables that have a non-zero starting value, like <code class="language-plaintext highlighter-rouge">boot_count</code>.</li>
+  <li><code class="language-plaintext highlighter-rouge">.bss</code> holds global and <code class="language-plaintext highlighter-rouge">static</code> variables that start at zero or have no initializer, like <code class="language-plaintext highlighter-rouge">ticks</code>.</li>
+</ul>
+
+<p><code class="language-plaintext highlighter-rouge">.text</code> and <code class="language-plaintext highlighter-rouge">.rodata</code> can stay in flash since they never change. <code class="language-plaintext highlighter-rouge">.data</code> and <code class="language-plaintext highlighter-rouge">.bss</code> are the problem. <code class="language-plaintext highlighter-rouge">boot_count</code> changes while the program runs so it has to be in RAM, but RAM is random at power-on, therefore the <code class="language-plaintext highlighter-rouge">42</code> has to be stored in flash and copied into RAM before <code class="language-plaintext highlighter-rouge">main()</code> runs. The C standard also says <code class="language-plaintext highlighter-rouge">ticks</code> starts at zero, so that part of RAM has to be cleared before <code class="language-plaintext highlighter-rouge">main()</code> as well. Those two jobs are most of what the startup code is for.</p>
+
+<h2 id="the-linker-script">The Linker Script</h2>
+
+<p>The compiler turns each <code class="language-plaintext highlighter-rouge">.c</code> file into an object file containing these sections, but without final addresses. The linker then combines them into one program and decides where every section goes, and for a microcontroller it needs a linker script describing the chip’s memory:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>MEMORY
+{
+    FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 64K
+    RAM   (rwx) : ORIGIN = 0x20000000, LENGTH = 8K
+}
+
+_estack = ORIGIN(RAM) + LENGTH(RAM);
+
+SECTIONS
+{
+    .isr_vector : { KEEP(*(.isr_vector)) } &gt; FLASH
+    .text       : { *(.text*) *(.rodata*) } &gt; FLASH
+
+    _sidata = LOADADDR(.data);
+    .data : { _sdata = .; *(.data*); _edata = .; } &gt; RAM AT &gt; FLASH
+
+    .bss  : { _sbss = .; *(.bss*) *(COMMON); _ebss = .; } &gt; RAM
+}
+</code></pre></div></div>
+
+<p>The <code class="language-plaintext highlighter-rouge">MEMORY</code> block lists where flash and RAM are and how big they are. In <code class="language-plaintext highlighter-rouge">SECTIONS</code>, <code class="language-plaintext highlighter-rouge">&gt; FLASH</code> and <code class="language-plaintext highlighter-rouge">&gt; RAM</code> say which memory each section goes into, and the vector table is listed first so it ends up at the very start of flash.</p>
+
+<p>On the <code class="language-plaintext highlighter-rouge">.data</code> line, <code class="language-plaintext highlighter-rouge">&gt; RAM AT &gt; FLASH</code> gives <code class="language-plaintext highlighter-rouge">.data</code> two addresses: the address it runs from in RAM, and the address where its initial values are stored in flash. The <code class="language-plaintext highlighter-rouge">.</code> in the script means the current address, so <code class="language-plaintext highlighter-rouge">_sdata = .;</code> and <code class="language-plaintext highlighter-rouge">_edata = .;</code> record where <code class="language-plaintext highlighter-rouge">.data</code> starts and ends in RAM, and <code class="language-plaintext highlighter-rouge">LOADADDR(.data)</code> gives the address of its copy in flash. <code class="language-plaintext highlighter-rouge">_sbss</code> and <code class="language-plaintext highlighter-rouge">_ebss</code> do the same for <code class="language-plaintext highlighter-rouge">.bss</code>.</p>
+
+<p>These names are linker symbols, not variables. A linker symbol is just an address, therefore in C they are declared as <code class="language-plaintext highlighter-rouge">extern</code> and only ever used with <code class="language-plaintext highlighter-rouge">&amp;</code>:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">extern</span> <span class="kt">uint32_t</span> <span class="n">_sidata</span><span class="p">,</span> <span class="n">_sdata</span><span class="p">,</span> <span class="n">_edata</span><span class="p">,</span> <span class="n">_sbss</span><span class="p">,</span> <span class="n">_ebss</span><span class="p">,</span> <span class="n">_estack</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p>Here <code class="language-plaintext highlighter-rouge">&amp;_sdata</code> is the address where <code class="language-plaintext highlighter-rouge">.data</code> starts. Reading <code class="language-plaintext highlighter-rouge">_sdata</code> itself reads whatever happens to be stored at that address, which is the classic first mistake with these.</p>
+
+<p>The symbol table of the built program shows where everything landed:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Symbol</th>
+      <th>Address</th>
+      <th>Meaning</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">_sidata</code></td>
+      <td><code class="language-plaintext highlighter-rouge">0x08000078</code></td>
+      <td>where the initial values of <code class="language-plaintext highlighter-rouge">.data</code> are stored in flash</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">_sdata</code> / <code class="language-plaintext highlighter-rouge">boot_count</code></td>
+      <td><code class="language-plaintext highlighter-rouge">0x20000000</code></td>
+      <td>start of <code class="language-plaintext highlighter-rouge">.data</code> in RAM</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">_edata</code> / <code class="language-plaintext highlighter-rouge">_sbss</code></td>
+      <td><code class="language-plaintext highlighter-rouge">0x20000004</code></td>
+      <td>end of <code class="language-plaintext highlighter-rouge">.data</code>, start of <code class="language-plaintext highlighter-rouge">.bss</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">ticks</code></td>
+      <td><code class="language-plaintext highlighter-rouge">0x20000004</code></td>
+      <td>the zero-initialized variable</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">_ebss</code></td>
+      <td><code class="language-plaintext highlighter-rouge">0x20000008</code></td>
+      <td>end of <code class="language-plaintext highlighter-rouge">.bss</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">_estack</code></td>
+      <td><code class="language-plaintext highlighter-rouge">0x20002000</code></td>
+      <td>top of RAM, the initial stack pointer</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>The value <code class="language-plaintext highlighter-rouge">42</code> for <code class="language-plaintext highlighter-rouge">boot_count</code> is stored in flash at <code class="language-plaintext highlighter-rouge">0x08000078</code>, and the variable itself lives in RAM at <code class="language-plaintext highlighter-rouge">0x20000000</code>.</p>
+
+<figure>
+  <img src="/content/a3/memory-map.svg" alt="Memory map with flash holding .isr_vector, .text, .rodata and the load copy of .data, and SRAM holding .data, .bss and the stack, with .data copied from flash at reset" />
+  <figcaption><b>Figure 2:</b> The memory map and the two jobs of the startup code. <small>(updated 2026)</small></figcaption>
+</figure>
+
+<h2 id="the-reset-handler">The Reset Handler</h2>
+
+<p>With those symbols the reset handler is a short C function:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">void</span> <span class="nf">Reset_Handler</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">src</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">_sidata</span><span class="p">;</span>
+    <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">dst</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">_sdata</span><span class="p">;</span>
+
+    <span class="k">while</span> <span class="p">(</span><span class="n">dst</span> <span class="o">&lt;</span> <span class="o">&amp;</span><span class="n">_edata</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="o">*</span><span class="n">dst</span><span class="o">++</span> <span class="o">=</span> <span class="o">*</span><span class="n">src</span><span class="o">++</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="n">dst</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">_sbss</span><span class="p">;</span>
+    <span class="k">while</span> <span class="p">(</span><span class="n">dst</span> <span class="o">&lt;</span> <span class="o">&amp;</span><span class="n">_ebss</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="o">*</span><span class="n">dst</span><span class="o">++</span> <span class="o">=</span> <span class="mi">0U</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="n">main</span><span class="p">();</span>
+
+    <span class="k">while</span> <span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="p">{</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Firstly, the first loop copies <code class="language-plaintext highlighter-rouge">.data</code> one 32-bit word at a time, reading from flash through <code class="language-plaintext highlighter-rouge">src</code> and writing to RAM through <code class="language-plaintext highlighter-rouge">dst</code>, until <code class="language-plaintext highlighter-rouge">dst</code> reaches the end of <code class="language-plaintext highlighter-rouge">.data</code>. Secondly, the second loop writes zero to every word from the start to the end of <code class="language-plaintext highlighter-rouge">.bss</code>. Copying a word at a time is safe because vendor linker scripts pad each section to a multiple of 4 bytes with <code class="language-plaintext highlighter-rouge">ALIGN(4)</code>. The infinite loop after <code class="language-plaintext highlighter-rouge">main()</code> is there because there is nothing to return to, therefore it is the only sane place to park the CPU.</p>
+
+<p>The compiler turns this into two small loops of instructions:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>800002c:  ldr    r4, [r0, r3]     ; load a word from flash into r4
+800002e:  str    r4, [r1, r3]     ; store r4 into RAM
+8000030:  adds   r3, #4           ; move to the next word
+8000032:  cmp    r3, r2           ; reached the end of .data?
+8000034:  bne.n  800002c          ; if not, go back
+   ...
+800004c:  stmia  r3!, {r1}        ; store r1 (zero) and advance r3
+800004e:  cmp    r3, r2           ; reached the end of .bss?
+8000050:  bne.n  800004c          ; if not, go back
+8000052:  bl     800006c &lt;main&gt;   ; call main, return address saved in LR
+</code></pre></div></div>
+
+<p>The numbers on the left are the addresses of each instruction in flash, which is what the program counter steps through. <code class="language-plaintext highlighter-rouge">stmia</code> stores a register and moves the pointer forward in one instruction, and <code class="language-plaintext highlighter-rouge">bl</code> is the call into <code class="language-plaintext highlighter-rouge">main</code>, which saves the return address in the link register and loads the address of <code class="language-plaintext highlighter-rouge">main</code> into the program counter.</p>
+
+<p>A real project uses the vendor’s startup file instead of writing its own, and it does the same two loops plus a little more before calling <code class="language-plaintext highlighter-rouge">main()</code>: it calls <code class="language-plaintext highlighter-rouge">SystemInit()</code> to set up the clocks, since the chip comes out of reset on a slow internal oscillator, switches the FPU on for parts that have one (until then the first floating point instruction faults), and calls <code class="language-plaintext highlighter-rouge">__libc_init_array()</code> to run C++ constructors and anything marked <code class="language-plaintext highlighter-rouge">__attribute__((constructor))</code>.</p>]]></content><author><name></name></author><summary type="html"><![CDATA[The first eight bytes of a Cortex-M firmware image are not code. Here they are from a minimal program I built with arm-none-eabi-gcc 10.3 at -O2 for an STM32F0 with 64 KB of flash and 8 KB of RAM:]]></summary></entry><entry><title type="html">Why 0x5f3759df?</title><link href="https://dansop.github.io/posts/Why-0x5f3759df/" rel="alternate" type="text/html" title="Why 0x5f3759df?" /><published>2021-03-12T00:00:00+00:00</published><updated>2021-03-12T00:00:00+00:00</updated><id>https://dansop.github.io/posts/Why-0x5f3759df</id><content type="html" xml:base="https://dansop.github.io/posts/Why-0x5f3759df/"><![CDATA[<p>This is the line from the Quake III Arena source code, comment and all:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">i</span>  <span class="o">=</span> <span class="mh">0x5f3759df</span> <span class="o">-</span> <span class="p">(</span> <span class="n">i</span> <span class="o">&gt;&gt;</span> <span class="mi">1</span> <span class="p">);</span>               <span class="c1">// what the fuck?</span>
+</code></pre></div></div>
+
+<p>Given the bits of a float <code class="language-plaintext highlighter-rouge">x</code> in <code class="language-plaintext highlighter-rouge">i</code>, it produces a first guess at \(\frac{1}{\sqrt{x}}\) that is within 3.5% of the right answer, using one shift and one subtraction. In 1999 a square root and a divide were slow enough that a game normalizing vectors every frame cared about that. The constant itself falls out of a logarithm and a bit of algebra, which is what the rest of this post is.</p>
+
+<p>Here it is in modern C. The original casts a <code class="language-plaintext highlighter-rouge">float*</code> to a <code class="language-plaintext highlighter-rouge">long*</code>, which breaks the strict aliasing rules, so <code class="language-plaintext highlighter-rouge">memcpy</code> is used instead:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cp">#include</span> <span class="cpf">&lt;stdint.h&gt;</span><span class="cp">
+#include</span> <span class="cpf">&lt;string.h&gt;</span><span class="cp">
+</span>
+<span class="kt">float</span> <span class="nf">fast_inv_sqrt</span><span class="p">(</span><span class="kt">float</span> <span class="n">x</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="kt">uint32_t</span> <span class="n">i</span><span class="p">;</span>
+    <span class="kt">float</span> <span class="n">y</span><span class="p">;</span>
+
+    <span class="n">memcpy</span><span class="p">(</span><span class="o">&amp;</span><span class="n">i</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">x</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">i</span><span class="p">));</span>          <span class="c1">// read the float's bits as an integer</span>
+    <span class="n">i</span> <span class="o">=</span> <span class="mh">0x5f3759df</span> <span class="o">-</span> <span class="p">(</span><span class="n">i</span> <span class="o">&gt;&gt;</span> <span class="mi">1</span><span class="p">);</span>          <span class="c1">// the magic line</span>
+    <span class="n">memcpy</span><span class="p">(</span><span class="o">&amp;</span><span class="n">y</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">i</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">y</span><span class="p">));</span>          <span class="c1">// back to a float</span>
+
+    <span class="n">y</span> <span class="o">=</span> <span class="n">y</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span><span class="p">.</span><span class="mi">5</span><span class="n">f</span> <span class="o">-</span> <span class="mi">0</span><span class="p">.</span><span class="mi">5</span><span class="n">f</span> <span class="o">*</span> <span class="n">x</span> <span class="o">*</span> <span class="n">y</span> <span class="o">*</span> <span class="n">y</span><span class="p">);</span>  <span class="c1">// one Newton step</span>
+    <span class="k">return</span> <span class="n">y</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="float-bits-as-a-logarithm">Float Bits as a Logarithm</h2>
+
+<p>A 32-bit float is made of a sign bit, an 8-bit exponent \(E\) and a 23-bit mantissa \(M\). For a positive number the value it represents is the following:</p>
+
+\[x = \left(1 + \frac{M}{2^{23}}\right) 2^{E - 127}\]
+
+<p>Taking \(\log_2\) of both sides:</p>
+
+\[\log_2(x) = E - 127 + \log_2\left(1 + \frac{M}{2^{23}}\right)\]
+
+<p>Writing \(m = \frac{M}{2^{23}}\), which is always between \(0\) and \(1\), the curve \(\log_2(1 + m)\) is fairly close to a straight line on that interval. Therefore we can approximate it with \(m + \sigma\), where \(\sigma\) is a small correction term (Figure 1):</p>
+
+<figure>
+  <img src="/content/a2/log-approx.svg" alt="Plot of log2(1 + m) against the straight line m + σ with σ = 0.0450, and the line m, for m from 0 to 1" />
+  <figcaption><b>Figure 1:</b> The straight line approximation. <small>(updated 2026)</small></figcaption>
+</figure>
+
+<p>Plugging that approximation back in gives the following:</p>
+
+\[\begin{aligned}
+\log_2(x) &amp;\approx \frac{M}{2^{23}} + \sigma + E - 127 \\
+&amp;= \frac{1}{2^{23}}\left(E \cdot 2^{23} + M\right) + \sigma - 127
+\end{aligned}\]
+
+<p>where \(E \cdot 2^{23} + M\) is the integer you get when you read the float’s bits as an integer. Calling that integer \(I_x\):</p>
+
+\[\boxed{\log_2(x) \approx \frac{I_x}{2^{23}} + \sigma - 127}\]
+
+<p>So the bits of a float, read as an integer, are roughly a scaled and shifted copy of its own logarithm (which I still find a little absurd), and everything after this is algebra.</p>
+
+<h2 id="deriving-the-constant">Deriving the Constant</h2>
+
+<p>We want \(y = \frac{1}{\sqrt{x}}\), so taking \(\log_2\) of that gives:</p>
+
+\[\log_2(y) = -\frac{1}{2}\log_2(x)\]
+
+<p>Replacing both logarithms with the integer approximation from above:</p>
+
+\[\frac{I_y}{2^{23}} + \sigma - 127 = -\frac{1}{2}\left(\frac{I_x}{2^{23}} + \sigma - 127\right)\]
+
+<p>Solving for \(I_y\):</p>
+
+\[\begin{aligned}
+\frac{I_y}{2^{23}} &amp;= -\frac{1}{2}\frac{I_x}{2^{23}} + \frac{3}{2}(127 - \sigma) \\
+I_y &amp;= \frac{3}{2} \cdot 2^{23} (127 - \sigma) - \frac{I_x}{2}
+\end{aligned}\]
+
+<p>The \(\frac{I_x}{2}\) term is <code class="language-plaintext highlighter-rouge">i &gt;&gt; 1</code> and the first term is a constant, so plugging in \(\sigma \approx 0.0450466\) gives the following:</p>
+
+\[\frac{3}{2} \cdot 2^{23} (127 - 0.0450466) = 1597463007 = \boxed{\texttt{0x5f3759df}}\]
+
+<p>The \(\sigma\) that best fits the straight line by itself is closer to \(0.0430\), so whoever picked <code class="language-plaintext highlighter-rouge">0x5f3759df</code> most likely tuned it for the result after the Newton step rather than for the line.</p>
+
+<p>As an example take \(x = 10\). Its bits read as an integer are <code class="language-plaintext highlighter-rouge">0x41200000</code>, and shifting right by one gives <code class="language-plaintext highlighter-rouge">0x20900000</code>. Subtracting that from the constant gives <code class="language-plaintext highlighter-rouge">0x3ea759df</code>, which read back as a float is \(0.3269\). The true value of \(\frac{1}{\sqrt{10}}\) is \(0.3162\), therefore the first guess is off by about 3.4%.</p>
+
+<h2 id="one-newton-step">One Newton Step</h2>
+
+<p>To refine the guess we use one step of Newton’s method, and we want the root of the following:</p>
+
+\[f(y) = \frac{1}{y^2} - x\]
+
+<p>since \(f(y) = 0\) exactly when \(y = \frac{1}{\sqrt{x}}\). With \(f'(y) = -\frac{2}{y^3}\), one Newton step becomes:</p>
+
+\[\begin{aligned}
+y_{n+1} &amp;= y_n - \frac{f(y_n)}{f'(y_n)} \\
+&amp;= y_n - \frac{\frac{1}{y_n^2} - x}{-\frac{2}{y_n^3}} \\
+&amp;= y_n\left(\frac{3}{2} - \frac{x}{2}y_n^2\right)
+\end{aligned}\]
+
+<p>This is the last line of the function, and it only needs multiplications, no division and no square root. For \(x = 10\) the guess of \(0.3269\) becomes \(0.3157\), which is within 0.17% of the true value.</p>
+
+<figure>
+  <img src="/content/a2/newton-error.svg" alt="Relative error for inputs 0.1 to 10: up to about 3.4% with the magic number alone and under 0.18% after one Newton step" />
+  <figcaption><b>Figure 2:</b> Error before and after the Newton step. <small>(updated 2026)</small></figcaption>
+</figure>
+
+<p>The error pattern repeats every factor of 4, since the square root halves the exponent. Over all inputs the worst case error is 3.44% from the magic number alone, 0.175% after one Newton step and 0.0005% after two.</p>
+
+<p>Modern x86 CPUs have <code class="language-plaintext highlighter-rouge">rsqrtss</code>, which makes the first guess in hardware to about 12 bits, and the same Newton step still gets bolted on after it when more precision is needed.</p>]]></content><author><name></name></author><summary type="html"><![CDATA[This is the line from the Quake III Arena source code, comment and all:]]></summary></entry><entry><title type="html">An Endeavor About Gabriel’s Horn</title><link href="https://dansop.github.io/posts/An-Endeavor-About-Gabriels-Horn/" rel="alternate" type="text/html" title="An Endeavor About Gabriel’s Horn" /><published>2021-01-28T00:00:00+00:00</published><updated>2021-01-28T00:00:00+00:00</updated><id>https://dansop.github.io/posts/An-Endeavor-About-Gabriels-Horn</id><content type="html" xml:base="https://dansop.github.io/posts/An-Endeavor-About-Gabriels-Horn/"><![CDATA[<p>I first plotted this horn in my notes back in January 2019 (Figure 1 is that exact plot), and the claim attached to it still sounds wrong to me: it holds a finite amount of paint, yet you could never paint the outside of it. Both halves of that only need first-year calculus, so the plan is to do the volume, then the surface area, and then deal with the paint.</p>
+
+<h2 id="the-horn">The Horn</h2>
+
+<p>Firstly we need the horn itself, so take the curve \(y = \frac{1}{x}\), only keep the part where \(x \geq 1\) and spin it around the x-axis. What comes out is a long trumpet that keeps getting thinner but never actually closes off, since \(\frac{1}{x}\) never reaches zero.</p>
+
+<figure>
+  <img class="invert-dark" src="/content/a0/horn-2019.png" alt="Gabriel's Horn drawn in 3D and from the side, the surface of y = 1/x rotated about the x-axis from x = 1 to 16" />
+  <figcaption><b>Figure 1:</b> Gabriel's Horn from x = 1 to 16.</figcaption>
+</figure>
+
+<h2 id="volume">Volume</h2>
+
+<p>The horn is infinitely long, so we cannot integrate all the way out right away. Instead I will chop it off at some arbitrary \(x = a\), do the math, and then let \(a\) run off to infinity at the very end.</p>
+
+<p>Using the disk method, every slice of the horn is a circle with a radius of \(\frac{1}{x}\), therefore each slice has an area of \(\pi\left(\frac{1}{x}\right)^2\) and adding up all of those slices from \(1\) to \(a\) gives the following:</p>
+
+\[\begin{aligned}
+V(a) &amp;= \pi \int_1^a \left(\frac{1}{x}\right)^2 dx \\
+&amp;= \pi \left[-\frac{1}{x}\right]_1^a \\
+&amp;= \pi\left(1 - \frac{1}{a}\right)
+\end{aligned}\]
+
+<p>Now letting the horn go on forever \(\dots\)</p>
+
+\[\boxed{\lim_{a\to\infty} V(a) = \pi}\]
+
+<p>\(\dots\) the volume converges to \(\pi\) cubic units. An infinitely long horn that holds about 3.14 units of paint.</p>
+
+<h2 id="surface-area">Surface Area</h2>
+
+<p>The surface area of a solid of revolution is given by the following:</p>
+
+\[A = 2\pi \int_1^a f(x)\sqrt{1 + \big(f'(x)\big)^2}\, dx\]
+
+<p>With \(f(x) = \frac{1}{x}\) and \(f'(x) = -\frac{1}{x^2}\) we get:</p>
+
+\[A(a) = 2\pi \int_1^a \frac{1}{x}\sqrt{1 + \frac{1}{x^4}}\, dx\]
+
+<p>This integral is not very pleasant to solve directly, but I do not need its exact value since a lower bound is enough to make the point. The square root \(\sqrt{1 + \frac{1}{x^4}}\) is bigger than one for every \(x\), so the integrand is always bigger than \(\frac{1}{x}\). Therefore:</p>
+
+\[\begin{aligned}
+A(a) &amp;&gt; 2\pi \int_1^a \frac{1}{x}\, dx \\
+&amp;= 2\pi \ln(a)
+\end{aligned}\]
+
+<p>And since \(\ln(a)\) grows without any bound \(\dots\)</p>
+
+\[\boxed{\lim_{a\to\infty} A(a) = \infty}\]
+
+<p>\(\dots\) the surface area is infinite, even though it grows very slowly.</p>
+
+<h2 id="volume-vs-surface-area">Volume vs. Surface Area</h2>
+
+<p>Figure 2 plots both against the length of the horn. The volume levels off at \(\pi\) after only a few units of length while the surface area keeps on climbing, and on a log axis the area is close to a straight line, which is exactly the \(\ln(a)\) from the bound above.</p>
+
+<figure>
+  <img src="/content/a0/volume-area.svg" alt="Log-scale plot of horn length against surface area, which keeps growing just above its 2π ln(a) lower bound, and volume, which levels off at π" />
+  <figcaption><b>Figure 2:</b> Volume vs. surface area. <small>(updated 2026)</small></figcaption>
+</figure>
+
+<p>Going from a length of 1,000 to 1,000,000 does not change the volume to two decimal places (3.14 both times), while the surface area almost doubles, from 44.1 to 87.5.</p>
+
+<h2 id="so-where-does-the-paint-go">So Where Does the Paint Go?</h2>
+
+<p>Essentially what this means is that one could easily fill the horn with paint, \(\pi\) units of it to be exact, but it would take an infinite amount of paint to cover the outside. Filling the horn also coats the inside walls though, which have the exact same infinite area, therefore the two results seem to contradict each other.</p>
+
+<p>The way out is that real paint has a thickness. Far enough down the horn the opening gets narrower than a single molecule of paint, so the paint simply cannot follow it all the way down. The mathematical horn has walls with zero thickness, and a layer of paint that keeps getting thinner can cover an infinite area with a finite volume.</p>]]></content><author><name></name></author><summary type="html"><![CDATA[I first plotted this horn in my notes back in January 2019 (Figure 1 is that exact plot), and the claim attached to it still sounds wrong to me: it holds a finite amount of paint, yet you could never paint the outside of it. Both halves of that only need first-year calculus, so the plan is to do the volume, then the surface area, and then deal with the paint.]]></summary></entry></feed>

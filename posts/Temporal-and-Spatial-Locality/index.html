@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Temporal and Spatial Locality - Analog Daydreams</title>
+  <meta name="description" content="Every cache is a bet that the future will look like the past. Hume spent a good part of the 1700s pointing out that there is no logical reason it should (the...">
+
+  <script>
+    (function () {
+      var theme;
+      try { theme = localStorage.getItem('theme'); } catch (e) {}
+      document.documentElement.dataset.theme = theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,700;1,7..72,400;1,7..72,700&display=swap">
+  <link rel="stylesheet" href="/css/main.css?v=1795129781">
+  <link rel="stylesheet" href="/css/syntax.css?v=1795129781">
+  <link type="application/atom+xml" rel="alternate" href="https://dansop.github.io/feed.xml" title="Analog Daydreams" />
+  <script>
+    MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous"></script>
+
+  <script type="module" src="/js/theme.js?v=1795129781"></script>
+</head>
+<body>
+  <header class="site-header">
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">dark</button>
+    <h1 class="site-title"><a href="/">Analog Daydreams</a></h1>
+    <nav class="site-nav">
+      <a href="/">Home</a>
+      <a href="/about/">About</a>
+      <a href="/golf/">Golf</a>
+    </nav>
+  </header>
+
+  <main>
+    <article class="post">
+  <header class="post-header">
+    <h1 class="post-title">Temporal and Spatial Locality</h1>
+    <time class="post-date" datetime="2026-11-19T00:00:00+00:00">November 19, 2026</time>
+  </header>
+
+  <div class="post-content">
+    <p>Every cache is a bet that the future will look like the past. Hume spent a good part of the 1700s pointing out that there is no logical reason it should (the sun rising every morning so far proves nothing about tomorrow), and yet every desktop CPU is built on exactly that bet: whatever you touched a moment ago you will probably touch again, and whatever sits right next to it you will probably want next. Those two assumptions are temporal and spatial locality, and I wanted to know what the bet is actually worth, both when it pays off and when it does not.</p>
+
+<p>So I wrote a few small benchmarks and ran them on my laptop, an AMD Ryzen 9 8945HS with 32 KB of L1 data cache and 1 MB of L2 per core and 16 MB of L3 shared between them. Everything was built with GCC 16.2 at <code class="language-plaintext highlighter-rouge">-O2</code>, run under WSL2 pinned to a single core, and every number below is the median of five runs.</p>
+
+<h2 id="temporal-locality">Temporal Locality</h2>
+
+<p>To see what the cache is worth, the benchmark first has to make it impossible to guess anything. I built a buffer of 64-byte nodes, one per cache line, linked every node into a single random cycle, and then just followed the pointers:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// One node per cache line, so every hop lands on a new line</span>
+<span class="k">typedef</span> <span class="k">struct</span> <span class="n">chase_node</span>
+<span class="p">{</span>
+    <span class="k">struct</span> <span class="n">chase_node</span> <span class="o">*</span><span class="n">next</span><span class="p">;</span>
+    <span class="kt">uint8_t</span> <span class="n">padding</span><span class="p">[</span><span class="n">CACHE_LINE_SIZE</span> <span class="o">-</span> <span class="k">sizeof</span><span class="p">(</span><span class="k">struct</span> <span class="n">chase_node</span> <span class="o">*</span><span class="p">)];</span>
+<span class="p">}</span> <span class="n">chase_node_t</span><span class="p">;</span>
+
+<span class="n">chase_node_t</span> <span class="o">*</span><span class="n">node</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">nodes</span><span class="p">[</span><span class="n">order</span><span class="p">[</span><span class="mi">0</span><span class="p">]];</span>
+
+<span class="k">for</span> <span class="p">(</span><span class="kt">uint32_t</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0U</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">NUM_CHASE_LOADS</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="n">node</span> <span class="o">=</span> <span class="n">node</span><span class="o">-&gt;</span><span class="n">next</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Every load needs the address that the previous load returns, so nothing can start early, and the random order leaves no pattern to learn. What is left is the raw latency of wherever the buffer happens to fit, and growing the buffer walks it down the memory hierarchy (Figure 1, “Random order”).</p>
+
+<figure>
+  <img src="/content/a5/working-set.svg" alt="Log-log plot of time per cache line against working set size from 4 KB to 512 MB. Random order steps up from 0.8 ns in L1 to about 3 ns in L2, 10 to 15 ns in L3 and about 125 ns in DRAM; front to back stays between 0.8 and 1.5 ns throughout" />
+  <figcaption><b>Figure 1:</b> Time per cache line against working set size.</figcaption>
+</figure>
+
+<p>While the whole cycle fits in the 32 KB of L1, a load takes 0.8 ns, about four clock cycles. Past that it steps up to 2.8 ns in L2, somewhere between 10 and 15 ns in L3, and once the buffer outgrows the 16 MB of L3 it climbs to 126 ns at 512 MB, which is DRAM plus a page table lookup on nearly every load. The steps do not land exactly on the cache sizes (the buffer is not the only thing living in the cache, and Windows is still running underneath WSL), and right at each boundary the numbers moved by up to a third between runs. Away from the boundaries they repeated within a few percent. Same loop, same number of instructions, and a factor of 160 between the two ends.</p>
+
+<h2 id="spatial-locality">Spatial Locality</h2>
+
+<p>Spatial locality is the other half of the bet. Memory moves between the levels a whole 64-byte line at a time, so reading one byte drags its 63 neighbours along for free, and the only way to see what that is worth is to stop using the neighbours. Figure 2 reads one byte every <code class="language-plaintext highlighter-rouge">stride</code> bytes across a 1 GB buffer, far bigger than L3.</p>
+
+<figure>
+  <img src="/content/a5/stride.svg" alt="Plot of time per access against stride from 8 bytes to 16 KB. Time rises from 0.4 ns at 8 bytes to 2.3 ns at 64 bytes, creeps up to about 6.7 ns by 2 KB and jumps to about 10.5 ns at 4 KB and beyond" />
+  <figcaption><b>Figure 2:</b> Time per access against stride.</figcaption>
+</figure>
+
+<p>Up to 64 bytes the time per access roughly doubles every time the stride doubles, from 0.4 ns at an 8-byte stride to 2.3 ns at 64. That is just one line being shared between fewer and fewer accesses, until every access gets a line to itself. Past that it creeps up to about 6.7 ns, and at 4 KB it jumps to 10.5 ns and stays there. 4 KB is the page size, therefore from there on every access lands on a new page and needs its own page table lookup, and hardware prefetchers generally will not follow a stream across a page boundary either.</p>
+
+<h2 id="the-prefetcher">The Prefetcher</h2>
+
+<p>The other line in Figure 1, “Front to back”, reads exactly the same working sets in order, and it barely moves. It takes about 0.8 ns per cache line while the data fits in cache and only 1.3 ns per line with 512 MB in DRAM, which is roughly 48 GB/s from a single core. The DRAM did not get any faster. The prefetcher watched the addresses climb one line at a time and started fetching lines before the loop asked for them, so by the time each load happens the data is already sitting in cache.</p>
+
+<p>This is the part of the machine I find the most cybernetic. Norbert Wiener’s anti-aircraft predictor in the 1940s took the past path of a plane and extrapolated where it would be by the time a shell got there. A stride prefetcher is the same idea moved into the memory system, extrapolating where your loop will be by the time a cache line can get there. It only knows the past, and it is only right because most loops are boringly predictable.</p>
+
+<p>Layout decides how predictable a program looks, even when the code does not change at all. I built the same 4 million node linked list twice, each node padded to one cache line, once with the nodes laid out in memory in list order and once scattered at random, and walked both with the same loop:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">for</span> <span class="p">(</span><span class="n">list_node_t</span> <span class="o">*</span><span class="n">node</span> <span class="o">=</span> <span class="n">head</span><span class="p">;</span> <span class="n">node</span> <span class="o">!=</span> <span class="nb">NULL</span><span class="p">;</span> <span class="n">node</span> <span class="o">=</span> <span class="n">node</span><span class="o">-&gt;</span><span class="n">next</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="n">sum</span> <span class="o">+=</span> <span class="n">node</span><span class="o">-&gt;</span><span class="n">value</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>In order it takes 2.4 ns per node. Scattered it takes 119 ns per node, 50 times slower, and the only thing that changed is where the nodes ended up.</p>
+
+<h2 id="when-nothing-can-be-predicted">When Nothing Can Be Predicted</h2>
+
+<p>The last benchmark was supposed to be the one where software prefetching saves the day. It reads random elements out of a 512 MB array, <code class="language-plaintext highlighter-rouge">data[index[i]]</code>, and optionally asks for the element <code class="language-plaintext highlighter-rouge">distance</code> iterations ahead with <code class="language-plaintext highlighter-rouge">__builtin_prefetch</code>:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">for</span> <span class="p">(</span><span class="kt">size_t</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0U</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">GATHER_LENGTH</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="k">if</span> <span class="p">((</span><span class="n">distance</span> <span class="o">!=</span> <span class="mi">0U</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="p">((</span><span class="n">i</span> <span class="o">+</span> <span class="n">distance</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">GATHER_LENGTH</span><span class="p">))</span>
+    <span class="p">{</span>
+        <span class="n">__builtin_prefetch</span><span class="p">(</span><span class="o">&amp;</span><span class="n">data</span><span class="p">[</span><span class="n">index</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="n">distance</span><span class="p">]]);</span>
+    <span class="p">}</span>
+    <span class="n">sum</span> <span class="o">+=</span> <span class="n">data</span><span class="p">[</span><span class="n">index</span><span class="p">[</span><span class="n">i</span><span class="p">]];</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Without any prefetching it already only takes 9.5 ns per element, which looks wrong at first, since every one of those reads is a random access into DRAM and DRAM was costing 125 ns a moment ago. The best prefetch distance only brought it down to 7.4 ns.</p>
+
+<figure>
+  <img src="/content/a5/dependent-loads.svg" alt="Bar chart of time per element: linked list in order 2.4 ns, linked list scattered 119.4 ns, random gather 9.5 ns, random gather with software prefetch 7.4 ns" />
+  <figcaption><b>Figure 3:</b> Dependent and independent random loads.</figcaption>
+</figure>
+
+<p>The difference between the scattered list and the random gather is the whole point. In the list the address of the next node lives <em>inside</em> the current node, therefore the CPU cannot even start the next load until the current one comes back, and every node pays the full trip to DRAM. In the gather every address comes from <code class="language-plaintext highlighter-rouge">index[]</code>, which is read front to back, so the out-of-order core can keep a pile of loads in flight at once. At 9.5 ns per element against roughly 125 ns of latency, that is about 13 loads overlapping. The prefetch hint only had the leftover 22% to work with, since the core was already doing most of the job on its own.</p>
+
+<p>The two lists in Figure 3 hold the same 4 million values and are walked by the same loop. The one laid out in order takes 10 ms. The scattered one takes half a second.</p>
+
+  </div>
+  <nav class="post-nav">
+    <a class="prev" rel="prev" href="/posts/Playing-with-My-Cache/">&larr; Playing with My Cache</a>
+  </nav>
+</article>
+
+  </main>
+</body>
+</html>

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Golf Scores - Analog Daydreams</title>
+  <meta name="description" content="A minimalist blog supporting markdown, LaTeX, code, etc...">
+
+  <script>
+    (function () {
+      var theme;
+      try { theme = localStorage.getItem('theme'); } catch (e) {}
+      document.documentElement.dataset.theme = theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,700;1,7..72,400;1,7..72,700&display=swap">
+  <link rel="stylesheet" href="/css/main.css?v=1795129781">
+  <link rel="stylesheet" href="/css/syntax.css?v=1795129781">
+  <link type="application/atom+xml" rel="alternate" href="https://dansop.github.io/feed.xml" title="Analog Daydreams" />
+
+  <script type="module" src="/js/theme.js?v=1795129781"></script>
+</head>
+<body>
+  <header class="site-header">
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">dark</button>
+    <h1 class="site-title"><a href="/">Analog Daydreams</a></h1>
+    <nav class="site-nav">
+      <a href="/">Home</a>
+      <a href="/about/">About</a>
+      <a href="/golf/" aria-current="page">Golf</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1 id="golf">Golf</h1>
+
+<div class="golf-summary">
+  <div class="handicap"><span class="value" id="current-handicap">--</span><span class="label">Handicap Index</span></div>
+  <div><span class="value" id="rounds-played">--</span><span class="label">Rounds</span></div>
+  <div><span class="value" id="best-score">--</span><span class="label">Best</span></div>
+  <div><span class="value" id="avg-score">--</span><span class="label">Average</span></div>
+</div>
+
+<div class="chart-container">
+  <canvas id="score-chart" role="img" aria-label="Score trend"></canvas>
+</div>
+
+<div class="table-wrap">
+  <table class="scores-table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Course</th>
+        <th>Score</th>
+        <th>Rating</th>
+        <th>Slope</th>
+        <th>Diff.</th>
+      </tr>
+    </thead>
+    <tbody id="scores-body"></tbody>
+  </table>
+</div>
+
+<script id="golf-data" type="application/json">[{"date":"2026-09-09","course":"Radium - The Springs course","score":92,"rating":70.3,"slope":123},{"date":"2026-09-08","course":"Fairmont Hot Springs - Riverside","score":94,"rating":71.7,"slope":123},{"date":"2026-09-07","course":"Fairmont Hot Springs - Mountainside","score":91,"rating":69.6,"slope":119},{"date":"2025-09-05","course":"McCall Lake Golf Course","score":91,"rating":65.8,"slope":110},{"date":"2025-08-20","course":"McCall Lake Golf Course","score":83,"rating":65.8,"slope":110},{"date":"2025-06-22","course":"Fairmont Hot Springs - Mountainside","score":88,"rating":69.6,"slope":119},{"date":"2025-06-21","course":"Radium - The Springs course","score":84,"rating":70.3,"slope":123},{"date":"2025-05-31","course":"Silvertip Resort","score":89,"rating":69.9,"slope":140},{"date":"2025-05-30","course":"Fox Hollow","score":84,"rating":68.3,"slope":120},{"date":"2025-05-25","course":"Apple Creek","score":85,"rating":70.0,"slope":110},{"date":"2025-05-02","course":"Shaganappi Point","score":81,"rating":62.9,"slope":110},{"date":"2025-04-27","course":"Fairmont Hot Springs - Mountainside","score":86,"rating":69.6,"slope":119},{"date":"2025-04-26","course":"Fairmont Hot Springs - Riverside","score":94,"rating":71.7,"slope":123}]</script>
+
+<script defer="" src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js" integrity="sha384-dug+JxfBvklEQdJ4AYuBBAIScUz0bVN73xpy273gcAwHjb3qI0fXmuYNaNfdyYJG" crossorigin="anonymous"></script>
+
+<script type="module" src="/js/golf-stats.js?v=1795129781"></script>
+
+
+  </main>
+</body>
+</html>

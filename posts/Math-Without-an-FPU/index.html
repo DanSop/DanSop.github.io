@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Math Without an FPU - Analog Daydreams</title>
+  <meta name="description" content="The Cortex-M0 has no floating point unit, therefore every float operation in C turns into a call into a software library. Fixed-point does the same math with...">
+
+  <script>
+    (function () {
+      var theme;
+      try { theme = localStorage.getItem('theme'); } catch (e) {}
+      document.documentElement.dataset.theme = theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,700;1,7..72,400;1,7..72,700&display=swap">
+  <link rel="stylesheet" href="/css/main.css?v=1795129781">
+  <link rel="stylesheet" href="/css/syntax.css?v=1795129781">
+  <link type="application/atom+xml" rel="alternate" href="https://dansop.github.io/feed.xml" title="Analog Daydreams" />
+  <script>
+    MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous"></script>
+
+  <script type="module" src="/js/theme.js?v=1795129781"></script>
+</head>
+<body>
+  <header class="site-header">
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">dark</button>
+    <h1 class="site-title"><a href="/">Analog Daydreams</a></h1>
+    <nav class="site-nav">
+      <a href="/">Home</a>
+      <a href="/about/">About</a>
+      <a href="/golf/">Golf</a>
+    </nav>
+  </header>
+
+  <main>
+    <article class="post">
+  <header class="post-header">
+    <h1 class="post-title">Math Without an FPU</h1>
+    <time class="post-date" datetime="2022-06-10T00:00:00+00:00">June 10, 2022</time>
+  </header>
+
+  <div class="post-content">
+    <p>The Cortex-M0 has no floating point unit, therefore every <code class="language-plaintext highlighter-rouge">float</code> operation in C turns into a call into a software library. Fixed-point does the same math with plain integer instructions and keeps track of the binary point purely by convention, and I wanted to know how big the difference really is on an STM32F072.</p>
+
+<p>Take a function that multiplies two floats, compiled with <code class="language-plaintext highlighter-rouge">arm-none-eabi-gcc</code> 10.3 at <code class="language-plaintext highlighter-rouge">-O2</code> for <code class="language-plaintext highlighter-rouge">-mcpu=cortex-m0</code>:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">float</span> <span class="nf">f_mul</span><span class="p">(</span><span class="kt">float</span> <span class="n">a</span><span class="p">,</span> <span class="kt">float</span> <span class="n">b</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="k">return</span> <span class="n">a</span> <span class="o">*</span> <span class="n">b</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>It compiles to:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>push  {r4, lr}
+bl    __aeabi_fmul
+pop   {r4, pc}
+</code></pre></div></div>
+
+<p>One <code class="language-plaintext highlighter-rouge">bl</code>. Every float multiply is a call into <code class="language-plaintext highlighter-rouge">libgcc</code>, which unpacks both numbers into sign, exponent and mantissa, multiplies the mantissas with integer instructions, then normalizes, rounds and packs the result back up. <code class="language-plaintext highlighter-rouge">__aeabi_fmul</code> is 588 bytes and <code class="language-plaintext highlighter-rouge">__aeabi_fadd</code> is 828 bytes, so the pair costs 1.4 KB of flash, about 9% of a 16 KB part, before a single line of your own code. (<code class="language-plaintext highlighter-rouge">__aeabi_lmul</code>, the 64-bit integer multiply, is another 90 bytes, and it comes back later.)</p>
+
+<h2 id="fixed-point-and-q-formats">Fixed-Point and Q Formats</h2>
+
+<p>Fixed-point stores a fractional number as an integer, with an agreed position for the binary point. A number in \(Q_{m.n}\) format has \(m\) integer bits and \(n\) fraction bits, and its value is:</p>
+
+\[\text{value} = \frac{\text{stored integer}}{2^n}\]
+
+<p>Q15 is a 16-bit signed integer with 15 fraction bits. It covers \([-1, 1)\) in steps of \(2^{-15} \approx 0.00003\), which suits audio samples and filter coefficients. Q16.16 is a 32-bit signed integer split down the middle, covering roughly \(\pm 32768\) in steps of \(2^{-16} \approx 0.000015\).</p>
+
+<figure>
+  <img src="/content/a4/q-formats.svg" alt="Bit layouts of Q15 (sign and 15 fraction bits, 0x6000 = 0.75) and Q16.16 (sign, 15 integer and 16 fraction bits, 0x0002 8000 = 2.5)" />
+  <figcaption><b>Figure 1:</b> Q15 and Q16.16 bit layouts. <small>(updated 2026)</small></figcaption>
+</figure>
+
+<p>Two numbers in the same format can be added and subtracted as plain integers:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">q16_t</span> <span class="nf">q16_add</span><span class="p">(</span><span class="n">q16_t</span> <span class="n">a</span><span class="p">,</span> <span class="n">q16_t</span> <span class="n">b</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="k">return</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>This compiles to a single <code class="language-plaintext highlighter-rouge">adds r0, r0, r1</code>, compared to a call into the 828-byte <code class="language-plaintext highlighter-rouge">__aeabi_fadd</code>.</p>
+
+<h2 id="multiplication">Multiplication</h2>
+
+<p>Multiplication needs a shift afterwards. Multiplying two Q15 numbers:</p>
+
+\[\begin{aligned}
+\frac{a}{2^{15}} \cdot \frac{b}{2^{15}} &amp;= \frac{a \cdot b}{2^{30}}
+\end{aligned}\]
+
+<p>So the raw product is in Q30 and has to be shifted right by 15 to get back to Q15:</p>
+
+\[\boxed{c = \frac{a \cdot b}{2^{15}}}\]
+
+<p>The product of two 16-bit numbers always fits in 32 bits, so the multiply itself is a single <code class="language-plaintext highlighter-rouge">muls</code> instruction.</p>
+
+<h3 id="rounding">Rounding</h3>
+
+<p>A plain right shift truncates, and since an arithmetic shift rounds toward negative infinity the error is always in the same direction. Over thousands of operations, for example in a filter, that bias accumulates. Adding half of the last bit before shifting turns it into round-to-nearest:</p>
+
+\[c = \frac{a \cdot b + 2^{14}}{2^{15}}\]
+
+<h3 id="overflow">Overflow</h3>
+
+<p>Q15 can represent \(-1\) but not \(+1\), therefore there is exactly one product that overflows: \(-1 \times -1\). To handle it the result is saturated:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">q15_t</span> <span class="nf">q15_mul</span><span class="p">(</span><span class="n">q15_t</span> <span class="n">a</span><span class="p">,</span> <span class="n">q15_t</span> <span class="n">b</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="kt">int32_t</span> <span class="n">product</span> <span class="o">=</span> <span class="p">(</span><span class="kt">int32_t</span><span class="p">)</span><span class="n">a</span> <span class="o">*</span> <span class="p">(</span><span class="kt">int32_t</span><span class="p">)</span><span class="n">b</span><span class="p">;</span>
+
+    <span class="c1">// Round to nearest, then drop the extra 15 fraction bits</span>
+    <span class="n">product</span> <span class="o">+=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">14</span><span class="p">);</span>
+    <span class="n">product</span> <span class="o">&gt;&gt;=</span> <span class="mi">15</span><span class="p">;</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="n">product</span> <span class="o">&gt;</span> <span class="n">INT16_MAX</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="n">product</span> <span class="o">=</span> <span class="n">INT16_MAX</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">product</span> <span class="o">&lt;</span> <span class="n">INT16_MIN</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="n">product</span> <span class="o">=</span> <span class="n">INT16_MIN</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="k">return</span> <span class="p">(</span><span class="n">q15_t</span><span class="p">)</span><span class="n">product</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>GCC compiles this to:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>movs   r3, #128
+lsls   r3, r3, #7       ; r3 = 0x4000 (2^14)
+mov    ip, r3
+movs   r3, #128
+muls   r1, r0           ; a * b
+add    r1, ip           ; + 2^14
+asrs   r0, r1, #15      ; &gt;&gt; 15
+lsls   r3, r3, #8       ; r3 = 0x8000
+cmp    r0, r3           ; did -1 * -1 overflow?
+bne.n  16
+ldr    r0, [pc, #4]     ; saturate to 0x7fff
+sxth   r0, r0
+bx     lr
+</code></pre></div></div>
+
+<p>GCC worked out that the result can never go below <code class="language-plaintext highlighter-rouge">INT16_MIN</code>, so it removed the second check entirely, and it turned the first check into an equality test against the one value that can overflow. Fairly clever for a compiler.</p>
+
+<h3 id="q1616-needs-64-bits">Q16.16 Needs 64 Bits</h3>
+
+<p>For Q16.16 the product of two 32-bit numbers needs 64 bits before the shift. The Cortex-M0 has no 32x32 to 64-bit multiply instruction, so this also becomes a library call, to <code class="language-plaintext highlighter-rouge">__aeabi_lmul</code>. That routine is 90 bytes of integer code rather than all the unpacking, normalizing and rounding done by <code class="language-plaintext highlighter-rouge">__aeabi_fmul</code>, but on an M0 only Q15 multiplication maps directly onto a hardware instruction.</p>
+
+<h2 id="benchmark">Benchmark</h2>
+
+<p>I ran each routine on a NUCLEO-F072RB (STM32F072, Cortex-M0) clocked from its 8 MHz internal oscillator with zero flash wait states. Each operation runs 1000 times over 64 pairs of random operands. The Cortex-M0 has no cycle counter, so the timing comes from the SysTick timer, which counts core clock cycles:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cp">#define NUM_ITERATIONS  1000U
+#define NUM_OPERANDS    64U
+#define SYSTICK_MAX     0x00FFFFFFU
+</span>
+<span class="k">static</span> <span class="kt">uint32_t</span> <span class="nf">run_float</span><span class="p">(</span><span class="kt">float</span> <span class="p">(</span><span class="o">*</span><span class="n">operation</span><span class="p">)(</span><span class="kt">float</span><span class="p">,</span> <span class="kt">float</span><span class="p">))</span>
+<span class="p">{</span>
+    <span class="n">SYST_RVR</span> <span class="o">=</span> <span class="n">SYSTICK_MAX</span><span class="p">;</span>
+    <span class="n">SYST_CVR</span> <span class="o">=</span> <span class="mi">0U</span><span class="p">;</span>
+    <span class="n">SYST_CSR</span> <span class="o">=</span> <span class="mh">0x5U</span><span class="p">;</span>  <span class="c1">// enable SysTick, clocked from the core clock</span>
+
+    <span class="k">for</span> <span class="p">(</span><span class="kt">uint32_t</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0U</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">NUM_ITERATIONS</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="kt">uint32_t</span> <span class="n">n</span> <span class="o">=</span> <span class="n">i</span> <span class="o">%</span> <span class="n">NUM_OPERANDS</span><span class="p">;</span>
+
+        <span class="n">g_floatResult</span> <span class="o">=</span> <span class="n">operation</span><span class="p">(</span><span class="n">g_floatA</span><span class="p">[</span><span class="n">n</span><span class="p">],</span> <span class="n">g_floatB</span><span class="p">[</span><span class="n">n</span><span class="p">]);</span>
+    <span class="p">}</span>
+
+    <span class="k">return</span> <span class="n">SYSTICK_MAX</span> <span class="o">-</span> <span class="n">SYST_CVR</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>The same loop calling an empty function took 23 cycles per iteration, and that baseline is subtracted from each result:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Operation</th>
+      <th>Cycles per op</th>
+      <th>vs. float multiply</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">float</code> multiply</td>
+      <td>166</td>
+      <td>1x</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">float</code> add</td>
+      <td>120</td>
+      <td>1.4x faster</td>
+    </tr>
+    <tr>
+      <td>Q16.16 multiply</td>
+      <td>81</td>
+      <td>2x faster</td>
+    </tr>
+    <tr>
+      <td>Q15 multiply</td>
+      <td>13</td>
+      <td>13x faster</td>
+    </tr>
+    <tr>
+      <td>Q16.16 add</td>
+      <td>1</td>
+      <td>166x faster</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>166 cycles against 13 for the same multiply, and a float add costs as much as 120 fixed-point ones. Q16.16 multiply only gets to twice as fast, because its 64-bit product still goes through <code class="language-plaintext highlighter-rouge">__aeabi_lmul</code>. And once <code class="language-plaintext highlighter-rouge">__aeabi_fmul</code> and <code class="language-plaintext highlighter-rouge">__aeabi_fadd</code> are linked in, they take up their 1.4 KB whether they are called once or a million times.</p>
+
+  </div>
+  <nav class="post-nav">
+    <a class="prev" rel="prev" href="/posts/What-Happens-Before-main/">&larr; What Happens Before main()?</a>
+    <a class="next" rel="next" href="/posts/The-Absurd-and-the-Undefined/">The Absurd and the Undefined &rarr;</a>
+  </nav>
+</article>
+
+  </main>
+</body>
+</html>
